@@ -39,6 +39,7 @@ const expectedNavigation = [
   ["ETF", "https://sonchanggi.github.io/etf-tracking/"],
   ["SOX", "https://sonchanggi.github.io/sox/"],
   ["Regime", "https://sonchanggi.github.io/regime/"],
+  ["News", "https://sonchanggi.github.io/news/"],
 ];
 let previousIndex = -1;
 for (const [label, href] of expectedNavigation) {
@@ -49,7 +50,7 @@ for (const [label, href] of expectedNavigation) {
 const navigation = html.match(/<nav class="site-nav quant-shared-nav"[\s\S]*?<\/nav>/)?.[0] || "";
 assert.match(html, /<body id="top" class="has-quant-shared-nav">/);
 assert.match(html, /assets\/shared-nav\.css\?v=__SHARED_NAV_VERSION__/);
-assert.equal((navigation.match(/href="https:\/\/sonchanggi\.github\.io\//g) || []).length, 8);
+assert.equal((navigation.match(/href="https:\/\/sonchanggi\.github\.io\//g) || []).length, 9);
 assert.equal((navigation.match(/aria-current="page"/g) || []).length, 1);
 assert.match(navigation, /quant-shared-nav__brand[^>]*href="https:\/\/sonchanggi\.github\.io\/quant-dashboard\/"/);
 assert.doesNotMatch(navigation, />Hub<\/a>/);
