@@ -41,7 +41,7 @@ const expectedNavigation = [
   ["Regime", "https://sonchanggi.github.io/regime/"],
   ["News", "https://sonchanggi.github.io/news/"],
   ["SPO", "https://sonchanggi.github.io/SPO/"],
-  ["연구 관측소", "https://research-observatory-changgi.changgi-son.chatgpt.site/"],
+  ["알파 하우스", "https://research-observatory-changgi.changgi-son.chatgpt.site/"],
 ];
 let previousIndex = -1;
 for (const [label, href] of expectedNavigation) {
