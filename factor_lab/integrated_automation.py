@@ -137,7 +137,7 @@ def validate_market_refresh(market, baseline_payload, target):
         if fresh / len(comparison) < .95:
             raise ValueError('Fewer than 95% of previously eligible equities have target-session quotes')
     return dict(targetDataAsOf=target, previousEligibleCompared=len(comparison),
-                targetSessionObserved=(fresh if comparison else 0), minimumCoverage=.95)
+                targetSessionObserved=(int(fresh) if comparison else 0), minimumCoverage=.95)
 
 
 def history_revision(baseline, candidate, tolerance=.001):

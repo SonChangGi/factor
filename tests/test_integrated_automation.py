@@ -75,7 +75,12 @@ def test_fresh_spy_does_not_hide_widespread_stale_equities():
     prices = pd.DataFrame(10., index=[day], columns=symbols)
     source = SimpleNamespace(prices=prices, metadata={'dataAsOf': str(day.date())})
     baseline = {'data': {'symbols': [{'symbol': s, 'status': 'eligible'} for s in symbols[3:]]}}
-    assert automation.validate_market_refresh(source, baseline, '2026-10-19')['targetSessionObserved'] == 20
+    report = automation.validate_market_refresh(source, baseline, '2026-10-19')
+    assert report['targetSessionObserved'] == 20
+    assert type(report['targetSessionObserved']) is int
+    # This object is embedded in publication.json after the full calculation.
+    # A NumPy int64 compared equal to 20 but broke that final serialization.
+    assert json.loads(json.dumps(report, allow_nan=False)) == report
     prices.loc[day, ['A0', 'A1']] = np.nan
     with pytest.raises(ValueError, match='95%'):
         automation.validate_market_refresh(source, baseline, '2026-10-19')
