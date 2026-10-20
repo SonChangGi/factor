@@ -7,7 +7,7 @@ import json
 import threading
 import unittest
 from unittest.mock import Mock, patch
-from momentum_factor_lab import integrated_service as service
+from factor_lab import integrated_service as service
 
 
 def result_fixture():
@@ -36,7 +36,7 @@ class ServiceReview(unittest.TestCase):
             TemporaryDirectory() as tmp,
             patch.object(service, "data_inventory", return_value=[]),
             patch(
-                "momentum_factor_lab.integrated_engine.run_integrated_analysis",
+                "factor_lab.integrated_engine.run_integrated_analysis",
                 return_value=result_fixture(),
             ) as run,
         ):
@@ -53,7 +53,7 @@ class ServiceReview(unittest.TestCase):
         with (
             TemporaryDirectory() as tmp,
             patch(
-                "momentum_factor_lab.integrated_engine.run_integrated_analysis",
+                "factor_lab.integrated_engine.run_integrated_analysis",
                 return_value=result_fixture(),
             ),
         ):

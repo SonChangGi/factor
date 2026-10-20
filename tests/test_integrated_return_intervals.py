@@ -6,15 +6,15 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from momentum_factor_lab.backtest import run_factor_backtest
-from momentum_factor_lab.config import FIXED_WEIGHTING_POLICY, RunConfig
-from momentum_factor_lab.integrated_engine import (
+from factor_lab.backtest import run_factor_backtest
+from factor_lab.config import FIXED_WEIGHTING_POLICY, RunConfig
+from factor_lab.integrated_engine import (
     IntegratedConfig,
     _monthly_candidate,
     build_research,
     metrics,
 )
-from momentum_factor_lab.portfolio import TargetAllocation
+from factor_lab.portfolio import TargetAllocation
 
 
 def _target(date):
@@ -98,7 +98,7 @@ def test_candidate_reports_only_missing_prices_of_actual_holdings():
 
 
 def test_research_masks_recovery_without_collapsing_the_calendar(monkeypatch):
-    import momentum_factor_lab.integrated_engine as engine
+    import factor_lab.integrated_engine as engine
 
     dates = pd.bdate_range("2020-01-01", periods=6)
     returns = {

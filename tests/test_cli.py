@@ -6,8 +6,8 @@ from types import SimpleNamespace
 import pandas as pd
 import pytest
 
-from momentum_factor_lab.config import MAX_TOP_N
-from momentum_factor_lab.cli import (
+from factor_lab.config import MAX_TOP_N
+from factor_lab.cli import (
     ScheduledGridPreset,
     _compact_summary,
     _config,
@@ -16,8 +16,8 @@ from momentum_factor_lab.cli import (
     build_parser,
     main,
 )
-from momentum_factor_lab.research_inputs import ResearchInputs
-from momentum_factor_lab.workflow import (
+from factor_lab.research_inputs import ResearchInputs
+from factor_lab.workflow import (
     AnalysisResult,
     NoEligibleFactorError,
     result_payload,
@@ -350,17 +350,17 @@ def test_demo_run_writes_only_isolated_preview_and_preserves_public_aliases(
             str(public_site),
         ]
     )
-    monkeypatch.setattr("momentum_factor_lab.cli.load_market_data", lambda config: object())
+    monkeypatch.setattr("factor_lab.cli.load_market_data", lambda config: object())
     monkeypatch.setattr(
-        "momentum_factor_lab.cli.build_result_identity",
+        "factor_lab.cli.build_result_identity",
         lambda config, market: payload["resultIdentity"],
     )
     monkeypatch.setattr(
-        "momentum_factor_lab.cli.load_analysis_cache",
+        "factor_lab.cli.load_analysis_cache",
         lambda config, identity: payload,
     )
     monkeypatch.setattr(
-        "momentum_factor_lab.cli.write_payload_json",
+        "factor_lab.cli.write_payload_json",
         lambda result_payload, path: path / "cached-result.json",
     )
 
@@ -399,9 +399,9 @@ def test_full_actual_run_refuses_to_collapse_public_multi_preset_docs_grid(
             "analyzedSecurityCount": 2_700,
         },
     }
-    monkeypatch.setattr("momentum_factor_lab.cli.load_market_data", lambda config: object())
+    monkeypatch.setattr("factor_lab.cli.load_market_data", lambda config: object())
     monkeypatch.setattr(
-        "momentum_factor_lab.cli._compute_payload",
+        "factor_lab.cli._compute_payload",
         lambda config, market: (payload, config.output_dir / "result.json"),
     )
 
@@ -465,7 +465,7 @@ def test_scheduled_dashboard_reads_run_site_and_title_config(
         )
         return {"sentinel": True}
 
-    monkeypatch.setattr("momentum_factor_lab.cli._execute_scheduled_grid", fake_execute)
+    monkeypatch.setattr("factor_lab.cli._execute_scheduled_grid", fake_execute)
     assert main(["scheduled-dashboard", "--config", str(path), "--json"]) == 0
 
     run_args = captured["args"]
@@ -593,7 +593,7 @@ def test_scheduled_grid_recomputes_every_declared_input_and_market_offset_preset
     )
     dates = pd.bdate_range("2024-01-02", periods=12)
     monkeypatch.setattr(
-        "momentum_factor_lab.cli.expected_recent_us_close_date", lambda now: dates[-1].date()
+        "factor_lab.cli.expected_recent_us_close_date", lambda now: dates[-1].date()
     )
     base_market = SimpleNamespace(
         candidate_symbols=[f"S{index:04d}" for index in range(2_700)],
@@ -605,9 +605,9 @@ def test_scheduled_grid_recomputes_every_declared_input_and_market_offset_preset
     computed_configs = []
     published = {}
 
-    monkeypatch.setattr("momentum_factor_lab.cli.load_market_data", lambda config: base_market)
+    monkeypatch.setattr("factor_lab.cli.load_market_data", lambda config: base_market)
     monkeypatch.setattr(
-        "momentum_factor_lab.cli.write_market_data_snapshot",
+        "factor_lab.cli.write_market_data_snapshot",
         lambda market, path: {"manifest": str(path / "market_data_manifest.json")},
     )
 
@@ -621,7 +621,7 @@ def test_scheduled_grid_recomputes_every_declared_input_and_market_offset_preset
             requested_through=config.effective_end_date,
         )
 
-    monkeypatch.setattr("momentum_factor_lab.cli.read_market_data_snapshot", fake_read_snapshot)
+    monkeypatch.setattr("factor_lab.cli.read_market_data_snapshot", fake_read_snapshot)
 
     def fake_compute(config, market):
         computed_configs.append(config)
@@ -639,17 +639,17 @@ def test_scheduled_grid_recomputes_every_declared_input_and_market_offset_preset
         }
         return payload, config.output_dir / f"{result_key}.json"
 
-    monkeypatch.setattr("momentum_factor_lab.cli._compute_payload", fake_compute)
+    monkeypatch.setattr("factor_lab.cli._compute_payload", fake_compute)
     monkeypatch.setattr(
-        "momentum_factor_lab.cli._require_full_actual_publication",
+        "factor_lab.cli._require_full_actual_publication",
         lambda payload, config: None,
     )
     monkeypatch.setattr(
-        "momentum_factor_lab.cli.dashboard_summary",
+        "factor_lab.cli.dashboard_summary",
         lambda payload: {"resultKey": payload["resultKey"]},
     )
     monkeypatch.setattr(
-        "momentum_factor_lab.cli.write_dashboard_site",
+        "factor_lab.cli.write_dashboard_site",
         lambda payload, site_dir, title: {"index": str(site_dir / "index.html")},
     )
 
@@ -661,10 +661,10 @@ def test_scheduled_grid_recomputes_every_declared_input_and_market_offset_preset
         )
         return {"manifest": data_dir / "grid" / "v1" / "manifest.json"}
 
-    monkeypatch.setattr("momentum_factor_lab.cli.write_static_grid", fake_write_grid)
-    monkeypatch.setattr("momentum_factor_lab.cli.validate_static_grid", lambda path: {})
+    monkeypatch.setattr("factor_lab.cli.write_static_grid", fake_write_grid)
+    monkeypatch.setattr("factor_lab.cli.validate_static_grid", lambda path: {})
     monkeypatch.setattr(
-        "momentum_factor_lab.cli._compact_summary",
+        "factor_lab.cli._compact_summary",
         lambda payload, paths: {"resultKey": payload["resultKey"], "paths": paths},
     )
     presets = [
@@ -737,7 +737,7 @@ def test_scheduled_grid_preserves_last_good_when_no_factor_is_eligible(
     )
     dates = pd.bdate_range("2026-07-01", periods=20)
     monkeypatch.setattr(
-        "momentum_factor_lab.cli.expected_recent_us_close_date", lambda now: dates[-1].date()
+        "factor_lab.cli.expected_recent_us_close_date", lambda now: dates[-1].date()
     )
     base_market = SimpleNamespace(
         candidate_symbols=[f"S{index:04d}" for index in range(2_700)],
@@ -746,9 +746,9 @@ def test_scheduled_grid_preserves_last_good_when_no_factor_is_eligible(
         requested_through=dates[-1].date().isoformat(),
         as_of=dates[-1],
     )
-    monkeypatch.setattr("momentum_factor_lab.cli.load_market_data", lambda config: base_market)
+    monkeypatch.setattr("factor_lab.cli.load_market_data", lambda config: base_market)
     monkeypatch.setattr(
-        "momentum_factor_lab.cli.write_market_data_snapshot",
+        "factor_lab.cli.write_market_data_snapshot",
         lambda market, path: {"manifest": str(path / "market_data_manifest.json")},
     )
 
@@ -762,7 +762,7 @@ def test_scheduled_grid_preserves_last_good_when_no_factor_is_eligible(
         ]
     )
     monkeypatch.setattr(
-        "momentum_factor_lab.cli._compute_payload",
+        "factor_lab.cli._compute_payload",
         lambda config, market: (_ for _ in ()).throw(error),
     )
 
@@ -796,7 +796,7 @@ def test_scheduled_grid_preserves_last_good_when_no_factor_is_eligible(
 
 
 def test_committed_dashboard_config_runs_full_packaged_live_universe() -> None:
-    payload = json.loads(Path(".github/momentum-dashboard-config.json").read_text(encoding="utf-8"))
+    payload = json.loads(Path(".github/factor-dashboard-config.json").read_text(encoding="utf-8"))
     run_args = payload["run_args"]
     args = build_parser().parse_args(["run", *run_args])
     config = _config(args)

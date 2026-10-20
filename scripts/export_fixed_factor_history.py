@@ -61,7 +61,10 @@ def main(argv=None):
     identity = parent['resultIdentity']
     source = args.calculation_source.resolve()
     sys.path.insert(0, str(source))
-    from momentum_factor_lab.integrated_service import code_fingerprint
+    package = 'factor_lab' if (source / 'factor_lab').is_dir() else 'momentum_factor_lab'
+    def module(name):
+        return importlib.import_module(package + '.' + name)
+    code_fingerprint = module('integrated_service').code_fingerprint
     code_hash, code_files = code_fingerprint()
     require_equal(code_hash, identity['codeHash'], 'calculation codeHash')
     require_equal(code_files, identity['codeHashFiles'], 'calculation source files')
@@ -70,19 +73,21 @@ def main(argv=None):
     # calculation package selected above.
     spec = importlib.util.spec_from_file_location(
         '_fixed_history_export_helper', Path(__file__).resolve().parents[1] /
-        'momentum_factor_lab' / 'integrated_history.py')
+        'factor_lab' / 'integrated_history.py')
     helper = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(helper)
     import pandas as pd
-    from momentum_factor_lab.integrated_data import load_integrated_market
-    from momentum_factor_lab.integrated_engine import (
-        IntegratedConfig, completed_monthends, _allocation, performance, metrics,
-        next_execution, clean,
-    )
-    from momentum_factor_lab.integrated_factors import factor_registry, iter_integrated_factors
-    from momentum_factor_lab.config import RunConfig, FIXED_WEIGHTING_POLICY
-    from momentum_factor_lab.backtest import run_factor_backtest
-    from momentum_factor_lab.integrated_repairs import backtest_inputs
+    load_integrated_market = module('integrated_data').load_integrated_market
+    engine = module('integrated_engine')
+    IntegratedConfig, completed_monthends, _allocation, performance, metrics, next_execution, clean = (
+        getattr(engine, name) for name in ('IntegratedConfig', 'completed_monthends', '_allocation',
+                                         'performance', 'metrics', 'next_execution', 'clean'))
+    factors_module = module('integrated_factors')
+    factor_registry, iter_integrated_factors = factors_module.factor_registry, factors_module.iter_integrated_factors
+    config_module = module('config')
+    RunConfig, FIXED_WEIGHTING_POLICY = config_module.RunConfig, config_module.FIXED_WEIGHTING_POLICY
+    run_factor_backtest = module('backtest').run_factor_backtest
+    backtest_inputs = module('integrated_repairs').backtest_inputs
 
     market = load_integrated_market(args.snapshot)
     require_equal(market.metadata['snapshotId'], identity['inputHash'], 'snapshot inputHash')

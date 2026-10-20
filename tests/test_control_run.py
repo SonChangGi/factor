@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from momentum_factor_lab.config import RunConfig
-from momentum_factor_lab.control_run import (
+from factor_lab.config import RunConfig
+from factor_lab.control_run import (
     CONTROL_ARTIFACT_CONTRACT_VERSION,
     CONTROL_CONFIG_HASH_ALGORITHM,
     CONTROL_INPUT_KEYS,
@@ -25,8 +25,8 @@ from momentum_factor_lab.control_run import (
     validate_control_binding,
     write_control_artifact,
 )
-from momentum_factor_lab.research_inputs import ResearchInputs
-from momentum_factor_lab.workflow import AnalysisResult, result_payload
+from factor_lab.research_inputs import ResearchInputs
+from factor_lab.workflow import AnalysisResult, result_payload
 
 
 def _inputs(**changes: object) -> dict[str, object]:
@@ -413,7 +413,7 @@ def test_artifact_rejects_result_for_a_different_input(
 
 def test_workflow_is_thin_external_worker_with_callback() -> None:
     workflow = Path(".github/workflows/controlled-analysis.yml").read_text(encoding="utf-8")
-    assert "python -m momentum_factor_lab.control_run" in workflow
+    assert "python -m factor_lab.control_run" in workflow
     assert "research_inputs_json:" in workflow
     assert "control_input_schema_version:" in workflow
     assert "control_input_schema_hash:" in workflow
@@ -438,10 +438,10 @@ def test_workflow_is_thin_external_worker_with_callback() -> None:
     assert workflow.count("or parsed.query") == 1
     assert workflow.count("or parsed_callback_base.query") == 1
     assert "Reject secrets in immutable controlled result" in workflow
-    assert "momentum_factor_lab.publication_security" in workflow
+    assert "factor_lab.publication_security" in workflow
     assert '"${ARTIFACT_PATH}"' in workflow
     assert '"${SIDECAR_PATH}"' in workflow
-    assert workflow.index("momentum_factor_lab.publication_security") < workflow.index(
+    assert workflow.index("factor_lab.publication_security") < workflow.index(
         'git add -- "${ARTIFACT_PATH}" "${SIDECAR_PATH}"'
     )
     assert "run_analysis" not in workflow

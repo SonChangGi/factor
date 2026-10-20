@@ -6,7 +6,7 @@ from types import ModuleType, SimpleNamespace
 
 import pytest
 
-from momentum_factor_lab.workflow import AnalysisResult, result_payload
+from factor_lab.workflow import AnalysisResult, result_payload
 
 
 @pytest.fixture(scope="module")

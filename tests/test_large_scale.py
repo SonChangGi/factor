@@ -2,9 +2,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from momentum_factor_lab.backtest import run_factor_backtest
-from momentum_factor_lab.config import FIXED_WEIGHTING_POLICY, RunConfig
-from momentum_factor_lab.factors import simple_momentum
+from factor_lab.backtest import run_factor_backtest
+from factor_lab.config import FIXED_WEIGHTING_POLICY, RunConfig
+from factor_lab.factors import simple_momentum
 
 
 def test_core_backtest_supports_a_2701_security_universe() -> None:

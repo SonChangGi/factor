@@ -1199,7 +1199,7 @@ def _download_yahoo_chart_symbol(
     for attempt in range(config.retry_count + 1):
         try:
             with urlopen(
-                Request(url, headers={"User-Agent": "momentum-factor-lab/0.1"}),
+                Request(url, headers={"User-Agent": "factor/0.1"}),
                 timeout=YAHOO_CHART_TIMEOUT_SECONDS,
             ) as response:
                 payload = json.loads(response.read().decode("utf-8", errors="replace"))
@@ -1656,7 +1656,7 @@ def _download_stooq_symbol(
     for attempt in range(config.retry_count + 1):
         try:
             with urlopen(
-                Request(url, headers={"User-Agent": "momentum-factor-lab/0.1"}), timeout=20
+                Request(url, headers={"User-Agent": "factor/0.1"}), timeout=20
             ) as response:
                 text = response.read().decode("utf-8", errors="replace")
             frame = pd.read_csv(StringIO(text))

@@ -3,7 +3,7 @@ import { webcrypto, createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
-const source = readFileSync('momentum_factor_lab/web/dashboard.js', 'utf8');
+const source = readFileSync('factor_lab/web/dashboard.js', 'utf8');
 const now = Date.parse('2026-09-18T03:00:00Z');
 class FixedDate extends Date { static now() { return now; } }
 const context = vm.createContext({

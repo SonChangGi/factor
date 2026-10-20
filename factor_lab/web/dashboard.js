@@ -1,5 +1,5 @@
-const MANUAL_UPDATE_WORKFLOW_URL = 'https://github.com/SonChangGi/momentum-factor-lab/actions/workflows/daily-dashboard.yml';
-const MANUAL_UPDATE_COMMAND = 'gh workflow run daily-dashboard.yml --repo SonChangGi/momentum-factor-lab --ref main';
+const MANUAL_UPDATE_WORKFLOW_URL = 'https://github.com/SonChangGi/factor/actions/workflows/daily-dashboard.yml';
+const MANUAL_UPDATE_COMMAND = 'gh workflow run daily-dashboard.yml --repo SonChangGi/factor --ref main';
 
 const MANIFEST_URL = 'data/grid/v1/manifest.json';
 const AUTOMATION_STATUS_URL = 'data/automation-status.json';
@@ -5917,7 +5917,7 @@ async function resolveControlRun(submission, loadToken, options = {}) {
 async function fetchVerifiedControlArtifact(resultEnvelope, options = {}) {
   const artifact = resultEnvelope.artifact;
   requireCondition(
-    /^github:SonChangGi\/momentum-factor-lab@[0-9a-f]{40}$/.test(resultEnvelope.codeVersion || ''),
+    /^github:SonChangGi\/(?:factor|momentum-factor-lab)@[0-9a-f]{40}$/.test(resultEnvelope.codeVersion || ''),
     '원격 결과 codeVersion이 허용된 Momentum commit 형식이 아닙니다.',
   );
   requireCondition(requiredText(resultEnvelope.calculatedAt), '원격 결과 calculatedAt이 없습니다.');
@@ -5937,7 +5937,7 @@ async function fetchVerifiedControlArtifact(resultEnvelope, options = {}) {
     '원격 결과 runId가 안전한 artifact 경로 형식이 아닙니다.',
   );
   const expectedArtifactUrl = (
-    `https://sonchanggi.github.io/momentum-factor-lab/data/control-runs/v1/`
+    `https://sonchanggi.github.io/factor/data/control-runs/v1/`
     + `${runId}/${resultKey}.json`
   );
   requireCondition(

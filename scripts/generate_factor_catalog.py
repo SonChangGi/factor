@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from momentum_factor_lab.advanced_factors import advanced_factor_definitions_frame
-from momentum_factor_lab.factors import factor_definition_sha256, factor_definitions_frame
+from factor_lab.advanced_factors import advanced_factor_definitions_frame
+from factor_lab.factors import factor_definition_sha256, factor_definitions_frame
 
 
 OUTPUT = Path("docs/factor-catalog.md")

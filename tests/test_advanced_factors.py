@@ -3,7 +3,7 @@ import warnings
 import numpy as np
 import pandas as pd
 
-from momentum_factor_lab.advanced_factors import (
+from factor_lab.advanced_factors import (
     ADVANCED_FACTOR_NAMES,
     advanced_factor_definitions_frame,
     compute_advanced_factor_scores,

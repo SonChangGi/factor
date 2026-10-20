@@ -13,23 +13,23 @@ from typing import Any, Callable
 import pandas as pd
 import pytest
 
-from momentum_factor_lab.config import MAX_TOP_N, RunConfig
-from momentum_factor_lab.data import (
+from factor_lab.config import MAX_TOP_N, RunConfig
+from factor_lab.data import (
     MarketData,
     _canonical_matrix_sha256,
     _ordered_symbols_sha256,
     canonical_records_sha256,
 )
-from momentum_factor_lab.identity import build_result_identity, canonical_json_bytes
-from momentum_factor_lab.local_api import (
+from factor_lab.identity import build_result_identity, canonical_json_bytes
+from factor_lab.local_api import (
     MIN_FULL_UNIVERSE_SECURITY_COUNT,
     LocalAPIConfigurationError,
     LocalResearchAPI,
     SynchronousJobExecutor,
 )
-from momentum_factor_lab.research_inputs import ResearchInputs
-from momentum_factor_lab.universe import DEFAULT_UNIVERSE
-from momentum_factor_lab.workflow import AnalysisResult, result_payload
+from factor_lab.research_inputs import ResearchInputs
+from factor_lab.universe import DEFAULT_UNIVERSE
+from factor_lab.workflow import AnalysisResult, result_payload
 
 
 _CANONICAL_PAYLOAD_TEMPLATE: dict[str, Any] | None = None
@@ -706,7 +706,7 @@ def test_api_refreshes_request_date_and_keeps_queued_identity_across_midnight(
         def shutdown(self):
             return None
 
-    monkeypatch.setattr("momentum_factor_lab.config.datetime", Clock)
+    monkeypatch.setattr("factor_lab.config.datetime", Clock)
     api, calls = _api(tmp_path, executor=ManualExecutor())
     api.base_config.end_date = None
     first_submission = _post(api)

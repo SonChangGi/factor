@@ -1,6 +1,6 @@
 const {JSDOM}=require('./integrated_dom_runtime.cjs');
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
-const web=path.join(__dirname,'../momentum_factor_lab/web'),html=fs.readFileSync(path.join(web,'integrated.html'),'utf8'),source=fs.readFileSync(path.join(web,'integrated.js'),'utf8');
+const web=path.join(__dirname,'../factor_lab/web'),html=fs.readFileSync(path.join(web,'integrated.html'),'utf8'),source=fs.readFileSync(path.join(web,'integrated.js'),'utf8');
 const runId='1234567890abcdef1234567890abcdef';
 const points=[{date:'2025-01-01',value:1},{date:'2025-02-01',value:1.1}];
 const factor=(id,ic=[])=>({id,label:id,family:'return',status:'available',metrics:{cagr:.1,mdd:-.1},nav:points,drawdown:points.map(p=>({...p,value:0})),definition:{selectionEligible:true},ic,quintiles:[],holdings:[],cashWeight:1});
@@ -15,7 +15,7 @@ let c=await setup();c.d.querySelector('[data-view="experiments"]').click(); // I
 c.dom.window.close();c=await setup({url:'http://localhost:50073/?view=experiments',list:[{runId,status:'completed'}]});c.d.querySelector('[data-job]').click();await settle();assert.equal(new URL(c.w.location.href).searchParams.get('run'),runId);assert.equal(c.d.getElementById('data-date').textContent,experiment.data.asOf);const openedUrl=c.w.location.href;c.w.history.back();await settle();assert.equal(c.d.getElementById('data-date').textContent,baseline.data.asOf);c.w.history.forward();await settle();assert.equal(c.d.getElementById('data-date').textContent,experiment.data.asOf);c.w.close();
 c=await setup({url:openedUrl});assert.equal(c.d.getElementById('data-date').textContent,experiment.data.asOf);c.w.close();
 // Missing, failed, pending, malformed IDs and public static URLs retain the baseline and explain why.
-for(const scenario of [{missing:true},{status:'failed'},{status:'running'},{external:true},{url:'http://localhost:50073/?run=bad'},{url:`https://sonchanggi.github.io/momentum-factor-lab/?run=${runId}`}]){c=await setup({url:`http://localhost:50073/?run=${runId}`,...scenario});assert.equal(c.d.getElementById('data-date').textContent,baseline.data.asOf);assert(c.d.getElementById('app-message').textContent.includes('저장된 기본 결과를 표시합니다.'));if(c.w.location.hostname==='sonchanggi.github.io')assert(!c.calls.some(x=>x.url.includes('/api/')));c.w.close();}
+for(const scenario of [{missing:true},{status:'failed'},{status:'running'},{external:true},{url:'http://localhost:50073/?run=bad'},{url:`https://sonchanggi.github.io/factor/?run=${runId}`}]){c=await setup({url:`http://localhost:50073/?run=${runId}`,...scenario});assert.equal(c.d.getElementById('data-date').textContent,baseline.data.asOf);assert(c.d.getElementById('app-message').textContent.includes('저장된 기본 결과를 표시합니다.'));if(c.w.location.hostname==='sonchanggi.github.io')assert(!c.calls.some(x=>x.url.includes('/api/')));c.w.close();}
 // Polling updates jobs without deleting stored stress diagnostics.
 c=await setup({url:'http://localhost:50073/?view=experiments',list:[{runId,status:'running'}]});assert(c.d.getElementById('experiment-stress').textContent.includes('실행 스트레스'));assert(c.d.getElementById('experiment-jobs').textContent.includes('완료'));c.w.close();
 // Null IC months do not dilute the observed-sample mean used in sorting.

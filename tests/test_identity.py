@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pandas as pd
 
-from momentum_factor_lab.config import RunConfig
-from momentum_factor_lab.data import MarketData
-from momentum_factor_lab.identity import (
+from factor_lab.config import RunConfig
+from factor_lab.data import MarketData
+from factor_lab.identity import (
     CANONICAL_JSON_VERSION,
     analysis_cache_path,
     build_result_identity,
@@ -20,7 +20,7 @@ from momentum_factor_lab.identity import (
 
 
 def test_engine_digest_covers_all_factor_implementation_modules() -> None:
-    import momentum_factor_lab.identity as identity_module
+    import factor_lab.identity as identity_module
 
     assert {"advanced_factors.py", "factors.py"} <= set(identity_module._ENGINE_SOURCE_FILES)
 
@@ -209,7 +209,7 @@ def test_analysis_crossing_utc_midnight_keeps_cache_identity(tmp_path: Path, mon
         def now(cls, tz=None):
             return cls.current.astimezone(tz)
 
-    monkeypatch.setattr("momentum_factor_lab.config.datetime", Clock)
+    monkeypatch.setattr("factor_lab.config.datetime", Clock)
     config = _config(tmp_path, end_date=None)
     market = _market(as_of="2026-09-17")
     before_analysis = build_result_identity(config, market)
@@ -236,7 +236,7 @@ def test_explicit_end_date_identity_ignores_run_start_day(tmp_path: Path, monkey
         def now(cls, tz=None):
             return cls.current.astimezone(tz)
 
-    monkeypatch.setattr("momentum_factor_lab.config.datetime", Clock)
+    monkeypatch.setattr("factor_lab.config.datetime", Clock)
     config = _config(tmp_path)
     market = _market()
     first = build_result_identity(config, market)
@@ -248,7 +248,7 @@ def test_factor_policy_and_selection_digests_are_part_of_identity(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    import momentum_factor_lab.identity as identity_module
+    import factor_lab.identity as identity_module
 
     config = _config(tmp_path)
     baseline = build_result_identity(config, _market())["resultKey"]

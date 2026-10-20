@@ -8,8 +8,8 @@ from typing import Any
 
 import pytest
 
-from momentum_factor_lab.config import FIXED_WEIGHTING_POLICY, POLICY_REGISTRY
-from momentum_factor_lab.dashboard import (
+from factor_lab.config import FIXED_WEIGHTING_POLICY, POLICY_REGISTRY
+from factor_lab.dashboard import (
     MAX_DASHBOARD_BYTES,
     WEB_ROOT,
     _factor_sets,
@@ -18,12 +18,12 @@ from momentum_factor_lab.dashboard import (
     validate_factor_holding_history_sidecar_bytes,
     write_dashboard_site,
 )
-from momentum_factor_lab.research_inputs import (
+from factor_lab.research_inputs import (
     LEGACY_RESEARCH_INPUTS_VERSION,
     TRADING_SESSIONS_PER_YEAR,
 )
-from momentum_factor_lab.identity import canonical_json_bytes
-from momentum_factor_lab.workflow import (
+from factor_lab.identity import canonical_json_bytes
+from factor_lab.workflow import (
     MAX_FACTOR_HOLDING_HISTORY_SIDECAR_BYTES,
     AnalysisResult,
     result_payload,

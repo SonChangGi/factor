@@ -5,7 +5,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW_DIR = ROOT / ".github" / "workflows"
 MUTABLE_ACTION_TAG = re.compile(r"uses:\s*[^#\n]*@v\d+\b")
-PINNED_ACTION_SHA = re.compile(r"uses:\s*actions/[A-Za-z0-9_.-]+@[0-9a-f]{40}(?:\s+#\s+v\d+)?\b")
+PINNED_ACTION_SHA = re.compile(r"uses:\s*actions/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*@[0-9a-f]{40}(?:\s+#\s+v\d+)?\b")
 
 
 class ActionsPinningTest(unittest.TestCase):

@@ -65,7 +65,7 @@ from .workflow import (
 )
 
 
-DEFAULT_SITE_TITLE = "Momentum Factor Lab"
+DEFAULT_SITE_TITLE = "Factor"
 WEB_ROOT = Path(__file__).with_name("web")
 # The complete Top-30 detail now includes 64 exact current targets plus the
 # 61-factor diagnostic evidence. Keep a bounded publication ceiling while

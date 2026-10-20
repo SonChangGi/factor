@@ -6,8 +6,8 @@ from types import SimpleNamespace
 import pandas as pd
 import pytest
 
-from momentum_factor_lab import cli
-from momentum_factor_lab.research_inputs import ResearchInputs
+from factor_lab import cli
+from factor_lab.research_inputs import ResearchInputs
 
 
 def saved_site(tmp_path):
@@ -150,7 +150,7 @@ def test_scheduler_exit_distinguishes_failure_from_valid_no_selection(
             "publication": {"lastGoodPreserved": True},
         },
     })
-    config = Path(".github/momentum-dashboard-config.json")
+    config = Path(".github/factor-dashboard-config.json")
     assert cli.main(["scheduled-dashboard", "--config", str(config), "--json"]) == expected
 
 

@@ -1,4 +1,4 @@
-name: Deploy Momentum Pages
+name: Deploy Factor Pages
 
 on:
   push:
@@ -17,7 +17,7 @@ on:
         type: string
 
 concurrency:
-  group: momentum-factor-lab-pages
+  group: factor-pages
   cancel-in-progress: false
 
 permissions:
@@ -132,16 +132,16 @@ jobs:
             tests/test_index_history_repair.py \
             tests/test_scheduled_recovery.py
           python scripts/validate_integrated_publication.py site
-          python -m momentum_factor_lab.publication_security site
+          python -m factor_lab.publication_security site
           python -m pytest -q tests/test_integrated*.py
           npm ci --ignore-scripts
           node --test scripts/test_integrated_web.cjs
           for test in scripts/test_integrated*dom.cjs; do
             node "$test" site/data/integrated-result.json
           done
-          python -m momentum_factor_lab.publication_security docs
+          python -m factor_lab.publication_security docs
           python scripts/build_integrated_publication.py --output public
-          python -m momentum_factor_lab.publication_security public
+          python -m factor_lab.publication_security public
           node --check docs/assets/dashboard.js
           MFL_TEST_PAYLOAD=docs/data/grid/v1/latest.json node scripts/test_web_contract.mjs
           MFL_TEST_PAYLOAD=docs/data/grid/v1/latest.json node scripts/test_common_design_v1_dom.mjs
@@ -178,7 +178,7 @@ jobs:
           EXPECTED_SOURCE_SHA: ${{ steps.source.outputs.sha }}
         run: |
           set -euo pipefail
-          expected_page_url="https://sonchanggi.github.io/momentum-factor-lab/"
+          expected_page_url="https://sonchanggi.github.io/factor/"
           if [[ "${PAGE_URL%/}/" != "${expected_page_url}" ]]; then
             echo "Unexpected Pages deployment URL: ${PAGE_URL}" >&2
             exit 1
@@ -234,7 +234,7 @@ jobs:
     steps:
       - name: Fail only when the existing Momentum page is unusable
         env:
-          PAGE_URL: https://sonchanggi.github.io/momentum-factor-lab/
+          PAGE_URL: https://sonchanggi.github.io/factor/
         shell: bash
         run: |
           set -u

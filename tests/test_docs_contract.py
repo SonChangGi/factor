@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from momentum_factor_lab.cli import LEGACY_SCHEDULED_ARGUMENTS, build_parser
+from factor_lab.cli import LEGACY_SCHEDULED_ARGUMENTS, build_parser
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -156,7 +156,7 @@ def test_factor_catalog_documents_all_64_factors_and_alias_status() -> None:
 
 
 def test_scheduled_dashboard_config_parses_as_uncapped_live_input() -> None:
-    config_path = ROOT / ".github/momentum-dashboard-config.json"
+    config_path = ROOT / ".github/factor-dashboard-config.json"
     payload = json.loads(config_path.read_text(encoding="utf-8"))
     run_args = payload["run_args"]
     namespace = build_parser().parse_args(["run", *run_args])
@@ -178,49 +178,29 @@ def test_scheduled_dashboard_config_parses_as_uncapped_live_input() -> None:
 
 
 def test_daily_workflow_runs_freshness_and_monotonic_schema_gates() -> None:
-    workflow = (ROOT / ".github/workflows/daily-dashboard.yml").read_text(encoding="utf-8")
-    watchdog = (ROOT / ".github/workflows/daily-dashboard-watchdog.yml").read_text(
-        encoding="utf-8"
-    )
-
-    assert "momentum_factor_lab.dashboard_freshness" in workflow
-    freshness_block = workflow.split(
-        "- name: Decide whether dashboard refresh should run", maxsplit=1
-    )[1].split("- name: Report skipped dashboard refresh", maxsplit=1)[0]
-    assert "continue-on-error" not in freshness_block
-    assert "momentum_factor_lab.dashboard_monotonic" in workflow
-    assert "momentum_factor_lab.cli scheduled-dashboard" in workflow
-    assert "momentum_factor_lab.publication_security docs" in workflow
-    assert "--data-path docs/data/dashboard.json" in workflow
-    assert "--status-path docs/data/automation-status.json" in workflow
-    assert workflow.count("--status-path docs/data/automation-status.json") == 1
-    assert "watchdog_origin:" in workflow
-    assert "WATCHDOG_ORIGIN:" in workflow
-    assert "continue-on-error: ${{ github.event_name == 'schedule' || inputs.watchdog_origin == true }}" not in workflow
-    assert "id: build\n        continue-on-error: true" in workflow
-    assert "refresh-result:" in workflow
-    assert "--exit-status" in workflow
-    assert "Preserve bounded refresh diagnostics" in workflow
-    assert "public-site-health:" in workflow
-    assert "Check public page availability separately from refresh success" in workflow
-    assert 'effective_event_name="schedule"' in workflow
-    assert "FRESHNESS_EVENT_NAME: ${{ steps.freshness.outputs.event_name }}" in workflow
-    assert (
-        'origin/${GITHUB_REF_NAME}:docs/data/automation-status.json'
-        in workflow
-    )
-    assert '--status-path "${remote_automation_status}"' in workflow
-    assert workflow.index("momentum_factor_lab.publication_security docs") < workflow.index(
-        "git add docs"
-    )
-    assert "git add docs" in workflow
-    assert "--status-path docs/data/automation-status.json" in watchdog
-    assert "-f watchdog_origin=true" in watchdog
-    assert "if: steps.freshness.outputs.skip != 'true'" in watchdog
-    assert "if: steps.freshness.outputs.skip == 'true'" in watchdog
-    assert "continue-on-error:" not in watchdog
-    assert "Install trading-session calendar" in watchdog
-    assert "public-site-health:" in watchdog
+    workflow = (ROOT / ".github/workflows/daily-dashboard.yml").read_text()
+    watchdog = (ROOT / ".github/workflows/daily-dashboard-watchdog.yml").read_text()
+    runner = (ROOT / "factor_lab/integrated_automation.py").read_text()
+    assert "factor_lab.integrated_automation freshness" in workflow
+    assert "factor_lab.integrated_automation run" in workflow
+    assert "factor_lab.integrated_automation promote" in workflow
+    assert "scheduled-dashboard" not in workflow
+    assert "--site site" in workflow and "--site site" in watchdog
+    assert "continue-on-error" not in workflow and "continue-on-error" not in watchdog
+    assert workflow.index("Bind current production source") < workflow.index("uv sync --frozen")
+    assert 'uv==0.11.17' in workflow and 'uv==0.11.17' in watchdog
+    assert 'uv sync --frozen --extra live' in workflow
+    assert workflow.index('Verify the saved input cache') < workflow.index('Promote and commit')
+    assert 'actions/cache/save@caa296126883cff596d87d8935842f9db880ef25' in workflow
+    assert 'gh api "repos/${GITHUB_REPOSITORY}/actions/caches?key=${CACHE_KEY}"' in workflow
+    assert 'inputCacheVerified' in runner and 'history_revision(' in runner
+    assert 'candidateHash' in runner and 'baselineHash' in runner
+    assert workflow.index('publication_security site') < workflow.index('git add -- site')
+    assert 'expected_source_sha="${SOURCE_SHA}"' in workflow
+    assert '--exit-status' in workflow and 'refresh-result:' in workflow
+    assert '-f watchdog_origin=true' in watchdog
+    assert 'latest_data_as_of' in watchdog and 'target_data_as_of' in watchdog
+    assert 'latest_run_kst' not in watchdog and 'cutoff_kst' not in watchdog
 
 
 def test_pages_workflow_has_one_owner_current_main_and_exact_readback() -> None:

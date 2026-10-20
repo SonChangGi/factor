@@ -1,17 +1,17 @@
 import numpy as np
 import pandas as pd
-from momentum_factor_lab.backtest import run_factor_backtest
-from momentum_factor_lab.config import RunConfig, FIXED_WEIGHTING_POLICY
-from momentum_factor_lab.portfolio import TargetAllocation
-from momentum_factor_lab.integrated_engine import (
+from factor_lab.backtest import run_factor_backtest
+from factor_lab.config import RunConfig, FIXED_WEIGHTING_POLICY
+from factor_lab.portfolio import TargetAllocation
+from factor_lab.integrated_engine import (
     metrics,
     rank_candidates,
     completed_monthends,
     IntegratedConfig,
     run_integrated_analysis,
 )
-from momentum_factor_lab.integrated_research import holm_adjust, synchronized_bootstrap
-from momentum_factor_lab.integrated_data import IntegratedMarket
+from factor_lab.integrated_research import holm_adjust, synchronized_bootstrap
+from factor_lab.integrated_data import IntegratedMarket
 
 
 def allocation(date, symbol=None):
@@ -148,7 +148,7 @@ def test_integrated_small_run_future_changes_leave_past_unchanged():
 
 
 def test_all_risk_fail_is_cash_but_missing_nav_defers():
-    from momentum_factor_lab.integrated_engine import _monthly_candidate
+    from factor_lab.integrated_engine import _monthly_candidate
 
     dates = pd.bdate_range("2016-01-01", periods=850)
     p = pd.DataFrame(
@@ -197,7 +197,7 @@ def test_pending_target_at_exchange_monthend_has_future_execution():
 
 
 def test_stress_executes_each_requested_scenario():
-    from momentum_factor_lab.integrated_engine import run_stress_suite
+    from factor_lab.integrated_engine import run_stress_suite
 
     dates = pd.bdate_range("2016-01-01", periods=100)
     p = pd.DataFrame(
@@ -209,12 +209,12 @@ def test_stress_executes_each_requested_scenario():
     result = run_stress_suite(
         market, IntegratedConfig(bootstrap_repetitions=0, evaluation_window_days=21), {"MOM12_1": p}
     )
-    assert {r["id"] for r in result} == {"cost20", "cost40", "delay2", "top10", "top30", "equal"}
+    assert {r["id"] for r in result} == {"cost20", "cost40", "delay2", "fixed_choice_delay2", "top10", "top30", "equal"}
     assert all(r["nav"] for r in result)
 
 
 def test_ic_uses_next_close_to_next_close_and_direction():
-    from momentum_factor_lab.integrated_research import monthly_signal_diagnostics
+    from factor_lab.integrated_research import monthly_signal_diagnostics
 
     dates = pd.bdate_range("2020-01-01", "2020-03-04")
     prices = pd.DataFrame(100.0, index=dates, columns=list("ABCDE"))
@@ -237,7 +237,7 @@ def test_bootstrap_does_not_stitch_missing_sessions():
 
 
 def test_metric_boundary_states_distinguish_empty_from_zero():
-    from momentum_factor_lab.integrated_engine import annotate_metric_states, clean
+    from factor_lab.integrated_engine import annotate_metric_states, clean
 
     out = {"metrics": metrics(pd.Series(dtype=float))}
     annotate_metric_states(out)
@@ -250,7 +250,7 @@ def test_metric_boundary_states_distinguish_empty_from_zero():
 
 
 def test_overlap_snapshots_use_drifted_actual_holdings_and_mark_missing():
-    from momentum_factor_lab.integrated_engine import actual_holding_snapshots
+    from factor_lab.integrated_engine import actual_holding_snapshots
 
     dates = pd.bdate_range("2020-01-01", periods=5)
     prices = pd.DataFrame({"A": [100, 100, 120, np.nan, 120], "B": [100] * 5}, index=dates)
@@ -300,3 +300,37 @@ def test_terminal_missing_held_quote_marks_factor_partial_data():
     assert row['latest']['valuationStatus'] == 'last_complete'
     assert row['latest']['holdingsAsOf'] == str(dates[-2].date())
     assert row['holdingsAsOf'] == str(dates[-1].date())
+
+
+def test_frozen_delay_executes_original_targets_not_new_candidates(monkeypatch):
+    import factor_lab.integrated_engine as engine
+    dates = pd.bdate_range('2020-01-30', periods=6)
+    prices = pd.DataFrame({'A': [100, 100, 110, 120, 132, 132],
+                           'B': [100, 100, 100, 100, 100, 200]}, index=dates)
+    volume = prices * 0 + 1e6
+    market = IntegratedMarket(prices, prices, prices, prices, prices, volume,
+                              prices * 0, prices * 0, prices.notna(), {'snapshotId': 'frozen-test'})
+    original = {dates[1]: allocation(dates[1], 'A')}
+    calls = []
+    def reevaluated(market, config, factors):
+        calls.append(config)
+        # Re-evaluation deliberately chooses B. The frozen path must ignore
+        # that decision and keep the original A order.
+        return {'selection': {'metrics': {}, 'nav': [{'date': str(dates[-1].date()), 'value': 2}],
+                              'drawdown': [], 'history': [{'factorId': 'B'}]},
+                'resultIdentity': {'resultId': 'reevaluated-B'}}
+    monkeypatch.setattr(engine, 'run_integrated_analysis', reevaluated)
+    rows = engine.run_stress_suite(market, IntegratedConfig(start_date='2020-01-30',
+        bootstrap_repetitions=0, transaction_cost_bps=0, slippage_bps=0),
+        frozen_targets=original, source_result_id='base-A')
+    frozen = next(r for r in rows if r['id'] == 'fixed_choice_delay2')
+    delayed = next(r for r in rows if r['id'] == 'delay2')
+    assert len(calls) == 6  # no second calculation of the original choices
+    assert frozen['selectionPolicy'] == 'frozen_original_monthly_targets'
+    assert delayed['selectionPolicy'] == 'reevaluated_monthly_candidates'
+    assert frozen['sourceResultId'] == delayed['sourceResultId'] == 'base-A'
+    # Jan31 signal -> Feb4 close (120), then A rises to132. Feb3 jump is
+    # excluded; B's doubled price must not enter this book.
+    assert np.isclose(frozen['nav'][-1]['value'], 1.1)
+    assert delayed['nav'][-1]['value'] == 2
+    assert original[dates[1]].weights().to_dict() == {'A': 1.0}

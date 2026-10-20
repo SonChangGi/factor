@@ -2,9 +2,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from momentum_factor_lab.integrated_data import IntegratedMarket, save_integrated_market, load_integrated_market
-from momentum_factor_lab.integrated_repairs import amend_market, backtest_inputs
-from momentum_factor_lab.integrated_research import forward_security_returns
+from factor_lab.integrated_data import IntegratedMarket, save_integrated_market, load_integrated_market
+from factor_lab.integrated_repairs import amend_market, backtest_inputs
+from factor_lab.integrated_research import forward_security_returns
 
 
 def market():

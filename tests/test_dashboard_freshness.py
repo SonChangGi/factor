@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from momentum_factor_lab.dashboard_freshness import (
+from factor_lab.dashboard_freshness import (
     decide_dashboard_freshness,
     expected_recent_us_close_date,
     load_dashboard_payload,

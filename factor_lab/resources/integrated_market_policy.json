@@ -1,0 +1,435 @@
+{
+  "schemaVersion": "market-amendments-v1",
+  "quotes": [
+    {
+      "symbol": "LBRDA",
+      "date": "2026-07-20",
+      "open": 30.73,
+      "high": 30.91,
+      "low": 30.2,
+      "close": 30.33,
+      "adjustedClose": 30.33,
+      "volume": 172695,
+      "sourceUrl": "https://stockanalysis.com/stocks/lbrda/history/",
+      "retrievedAt": "2026-10-20T01:15:38.167284+00:00",
+      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval"
+    },
+    {
+      "symbol": "LBRDA",
+      "date": "2026-07-21",
+      "open": 30.21,
+      "high": 30.81,
+      "low": 29.9,
+      "close": 30.04,
+      "adjustedClose": 30.04,
+      "volume": 148849,
+      "sourceUrl": "https://stockanalysis.com/stocks/lbrda/history/",
+      "retrievedAt": "2026-10-20T01:15:38.167280+00:00",
+      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval"
+    },
+    {
+      "symbol": "LBRDA",
+      "date": "2026-07-22",
+      "open": 30.35,
+      "high": 30.52,
+      "low": 29.42,
+      "close": 30.38,
+      "adjustedClose": 30.38,
+      "volume": 262611,
+      "sourceUrl": "https://stockanalysis.com/stocks/lbrda/history/",
+      "retrievedAt": "2026-10-20T01:15:38.167277+00:00",
+      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval"
+    },
+    {
+      "symbol": "LBRDA",
+      "date": "2026-07-23",
+      "open": 30.0,
+      "high": 30.47,
+      "low": 28.92,
+      "close": 29.7,
+      "adjustedClose": 29.7,
+      "volume": 255240,
+      "sourceUrl": "https://stockanalysis.com/stocks/lbrda/history/",
+      "retrievedAt": "2026-10-20T01:15:38.167273+00:00",
+      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval"
+    },
+    {
+      "symbol": "LBRDA",
+      "date": "2026-07-24",
+      "open": 26.5,
+      "high": 29.46,
+      "low": 26.14,
+      "close": 28.87,
+      "adjustedClose": 28.87,
+      "volume": 400622,
+      "sourceUrl": "https://stockanalysis.com/stocks/lbrda/history/",
+      "retrievedAt": "2026-10-20T01:15:38.167269+00:00",
+      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval"
+    },
+    {
+      "symbol": "LBRDA",
+      "date": "2026-07-27",
+      "open": 28.87,
+      "high": 31.11,
+      "low": 28.87,
+      "close": 30.8,
+      "adjustedClose": 30.8,
+      "volume": 202532,
+      "sourceUrl": "https://stockanalysis.com/stocks/lbrda/history/",
+      "retrievedAt": "2026-10-20T01:15:38.167265+00:00",
+      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval"
+    },
+    {
+      "symbol": "LBRDA",
+      "date": "2026-07-28",
+      "open": 31.21,
+      "high": 33.17,
+      "low": 31.21,
+      "close": 32.86,
+      "adjustedClose": 32.86,
+      "volume": 208117,
+      "sourceUrl": "https://stockanalysis.com/stocks/lbrda/history/",
+      "retrievedAt": "2026-10-20T01:15:38.167261+00:00",
+      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval"
+    },
+    {
+      "symbol": "LBRDA",
+      "date": "2026-07-29",
+      "open": 32.67,
+      "high": 34.44,
+      "low": 32.15,
+      "close": 34.06,
+      "adjustedClose": 34.06,
+      "volume": 340387,
+      "sourceUrl": "https://stockanalysis.com/stocks/lbrda/history/",
+      "retrievedAt": "2026-10-20T01:15:38.167257+00:00",
+      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval"
+    },
+    {
+      "symbol": "LBRDA",
+      "date": "2026-07-30",
+      "open": 32.93,
+      "high": 33.38,
+      "low": 32.09,
+      "close": 33.33,
+      "adjustedClose": 33.33,
+      "volume": 208367,
+      "sourceUrl": "https://stockanalysis.com/stocks/lbrda/history/",
+      "retrievedAt": "2026-10-20T01:15:38.167254+00:00",
+      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval"
+    },
+    {
+      "symbol": "LBRDA",
+      "date": "2026-07-31",
+      "open": 32.9,
+      "high": 34.43,
+      "low": 32.71,
+      "close": 34.06,
+      "adjustedClose": 34.06,
+      "volume": 200548,
+      "sourceUrl": "https://stockanalysis.com/stocks/lbrda/history/",
+      "retrievedAt": "2026-10-20T01:15:38.167250+00:00",
+      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval"
+    },
+    {
+      "symbol": "LBRDA",
+      "date": "2026-08-03",
+      "open": 34.69,
+      "high": 34.84,
+      "low": 33.42,
+      "close": 33.85,
+      "adjustedClose": 33.85,
+      "volume": 184227,
+      "sourceUrl": "https://stockanalysis.com/stocks/lbrda/history/",
+      "retrievedAt": "2026-10-20T01:15:38.167246+00:00",
+      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval"
+    },
+    {
+      "symbol": "LBRDA",
+      "date": "2026-08-04",
+      "open": 34.03,
+      "high": 36.08,
+      "low": 33.79,
+      "close": 36.04,
+      "adjustedClose": 36.04,
+      "volume": 319960,
+      "sourceUrl": "https://stockanalysis.com/stocks/lbrda/history/",
+      "retrievedAt": "2026-10-20T01:15:38.167241+00:00",
+      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval"
+    },
+    {
+      "symbol": "LBRDA",
+      "date": "2026-08-05",
+      "open": 36.04,
+      "high": 36.1,
+      "low": 35.01,
+      "close": 36.02,
+      "adjustedClose": 36.02,
+      "volume": 179084,
+      "sourceUrl": "https://stockanalysis.com/stocks/lbrda/history/",
+      "retrievedAt": "2026-10-20T01:15:38.167237+00:00",
+      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval"
+    },
+    {
+      "symbol": "LBRDA",
+      "date": "2026-08-06",
+      "open": 36.02,
+      "high": 37.13,
+      "low": 35.73,
+      "close": 37.09,
+      "adjustedClose": 37.09,
+      "volume": 152068,
+      "sourceUrl": "https://stockanalysis.com/stocks/lbrda/history/",
+      "retrievedAt": "2026-10-20T01:15:38.167233+00:00",
+      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval"
+    },
+    {
+      "symbol": "LBRDA",
+      "date": "2026-08-07",
+      "open": 37.13,
+      "high": 37.13,
+      "low": 35.78,
+      "close": 35.93,
+      "adjustedClose": 35.93,
+      "volume": 146871,
+      "sourceUrl": "https://stockanalysis.com/stocks/lbrda/history/",
+      "retrievedAt": "2026-10-20T01:15:38.167229+00:00",
+      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval"
+    },
+    {
+      "symbol": "LBRDA",
+      "date": "2026-08-10",
+      "open": 35.0,
+      "high": 36.26,
+      "low": 34.9,
+      "close": 36.06,
+      "adjustedClose": 36.06,
+      "volume": 160361,
+      "sourceUrl": "https://stockanalysis.com/stocks/lbrda/history/",
+      "retrievedAt": "2026-10-20T01:15:38.167224+00:00",
+      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval"
+    },
+    {
+      "symbol": "LBRDA",
+      "date": "2026-08-11",
+      "open": 35.7,
+      "high": 37.32,
+      "low": 35.65,
+      "close": 37.11,
+      "adjustedClose": 37.11,
+      "volume": 170690,
+      "sourceUrl": "https://stockanalysis.com/stocks/lbrda/history/",
+      "retrievedAt": "2026-10-20T01:15:38.167219+00:00",
+      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval"
+    },
+    {
+      "symbol": "LBRDA",
+      "date": "2026-08-12",
+      "open": 36.49,
+      "high": 36.49,
+      "low": 35.25,
+      "close": 35.35,
+      "adjustedClose": 35.35,
+      "volume": 114130,
+      "sourceUrl": "https://stockanalysis.com/stocks/lbrda/history/",
+      "retrievedAt": "2026-10-20T01:15:38.167214+00:00",
+      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval"
+    },
+    {
+      "symbol": "LBRDA",
+      "date": "2026-08-13",
+      "open": 35.56,
+      "high": 36.93,
+      "low": 35.52,
+      "close": 36.83,
+      "adjustedClose": 36.83,
+      "volume": 159155,
+      "sourceUrl": "https://stockanalysis.com/stocks/lbrda/history/",
+      "retrievedAt": "2026-10-20T01:15:38.167206+00:00",
+      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval"
+    },
+    {
+      "symbol": "LBRDA",
+      "date": "2026-08-14",
+      "open": 37.02,
+      "high": 37.17,
+      "low": 36.27,
+      "close": 36.3,
+      "adjustedClose": 36.3,
+      "volume": 65229,
+      "sourceUrl": "https://stockanalysis.com/stocks/lbrda/history/",
+      "retrievedAt": "2026-10-20T01:15:38.167200+00:00",
+      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval"
+    },
+    {
+      "symbol": "LBRDA",
+      "date": "2026-08-17",
+      "open": 35.86,
+      "high": 35.94,
+      "low": 33.94,
+      "close": 33.94,
+      "adjustedClose": 33.94,
+      "volume": 118703,
+      "sourceUrl": "https://stockanalysis.com/stocks/lbrda/history/",
+      "retrievedAt": "2026-10-20T01:15:38.167194+00:00",
+      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval"
+    },
+    {
+      "symbol": "LBRDA",
+      "date": "2026-08-18",
+      "open": 34.49,
+      "high": 35.87,
+      "low": 34.26,
+      "close": 35.0,
+      "adjustedClose": 35.0,
+      "volume": 176889,
+      "sourceUrl": "https://stockanalysis.com/stocks/lbrda/history/",
+      "retrievedAt": "2026-10-20T01:15:38.167184+00:00",
+      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval"
+    },
+    {
+      "symbol": "LBRDA",
+      "date": "2026-08-19",
+      "open": 34.87,
+      "high": 37.58,
+      "low": 34.87,
+      "close": 35.99,
+      "adjustedClose": 35.99,
+      "volume": 1900760,
+      "sourceUrl": "https://stockanalysis.com/stocks/lbrda/history/",
+      "retrievedAt": "2026-10-20T01:15:38.167060+00:00",
+      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval"
+    },
+    {
+      "symbol": "FISV",
+      "date": "2025-11-12",
+      "close": 64.38,
+      "adjustedClose": 64.38,
+      "volume": 6244651,
+      "sourceUrl": "https://www.financecharts.com/stocks/FISV/summary/price",
+      "retrievedAt": "2026-10-20T01:15:38.265036+00:00",
+      "basis": "Historical daily quote supplied by FinanceCharts; closing price corroborated by broker Trading212; no split or dividend in requested interval; OHLC intentionally omitted because brokerage buying-rate basis differs from consolidated OHLC"
+    }
+  ],
+  "valuationMarks": [
+    {
+      "symbol": "MESO",
+      "date": "2025-01-10",
+      "close": 17.18000030517578,
+      "adjustedClose": 17.18000030517578,
+      "volume": 0,
+      "sourceUrl": "https://query1.finance.yahoo.com/v8/finance/chart/MESO?period1=1736173800&period2=1737210600&interval=1d&events=div%2Csplits",
+      "retrievedAt": "2026-10-20T01:15:38.265488+00:00",
+      "basis": "Provider reported unchanged close and zero volume; valuation-only non-tradable halt mark, not fabricated trade; source full request receipt in yahoo-MESO-2025-01-06.json"
+    },
+    {
+      "symbol": "MESO",
+      "date": "2025-01-13",
+      "close": 17.18000030517578,
+      "adjustedClose": 17.18000030517578,
+      "volume": 0,
+      "sourceUrl": "https://query1.finance.yahoo.com/v8/finance/chart/MESO?period1=1736173800&period2=1737210600&interval=1d&events=div%2Csplits",
+      "retrievedAt": "2026-10-20T01:15:38.265491+00:00",
+      "basis": "Provider reported unchanged close and zero volume; valuation-only non-tradable halt mark, not fabricated trade; source full request receipt in yahoo-MESO-2025-01-06.json"
+    },
+    {
+      "symbol": "IPX",
+      "date": "2025-11-13",
+      "close": 34.15999984741211,
+      "adjustedClose": 34.15999984741211,
+      "volume": 0,
+      "sourceUrl": "https://query1.finance.yahoo.com/v8/finance/chart/IPX?period1=1762785000&period2=1763562600&interval=1d&events=div%2Csplits",
+      "retrievedAt": "2026-10-20T01:15:38.265588+00:00",
+      "basis": "Provider reported unchanged close and zero volume; valuation-only non-tradable halt mark, not fabricated trade; source full request receipt in yahoo-IPX-2025-11-10.json"
+    },
+    {
+      "symbol": "IPX",
+      "date": "2025-11-14",
+      "close": 34.15999984741211,
+      "adjustedClose": 34.15999984741211,
+      "volume": 0,
+      "sourceUrl": "https://query1.finance.yahoo.com/v8/finance/chart/IPX?period1=1762785000&period2=1763562600&interval=1d&events=div%2Csplits",
+      "retrievedAt": "2026-10-20T01:15:38.265590+00:00",
+      "basis": "Provider reported unchanged close and zero volume; valuation-only non-tradable halt mark, not fabricated trade; source full request receipt in yahoo-IPX-2025-11-10.json"
+    }
+  ],
+  "identityStarts": [
+    {
+      "symbol": "CHRD",
+      "date": "2020-11-20",
+      "reason": "Cancelled pre-emergence equity is not the new common security; historical old equity is not spliced into CHRD.",
+      "sourceUrl": "https://www.sec.gov/Archives/edgar/data/1486159/000148615920000115/oasemergencereleasefil.htm"
+    },
+    {
+      "symbol": "DEC",
+      "date": "2023-12-18",
+      "reason": "First verified NYSE USD listing. Pre-listing provider series has unrecorded 20:1 consolidation and unverified venue/currency; not extended by guessed multiplier.",
+      "sourceUrl": "https://ir.div.energy/news-events/us-press-releases/detail/161/diversified-energy-begins-trading-on-nyse"
+    }
+  ],
+  "quarantines": [
+    {
+      "symbol": "WNRS",
+      "reason": "Missing 1:300 reverse split and mutually inconsistent quote basis in fresh provider data; no validated continuous free replacement. Symbol retained in requested union, unavailable for analysis.",
+      "sourceUrl": "https://www.nasdaq.com/press-release/winners-inc-announces-300-1-reverse-stock-split-position-strategic-growth-and-future"
+    },
+    {
+      "symbol": "BURU",
+      "reason": "Confirmed 1:40 reverse split and OTC transition, but fresh provider history mixes pre/post-split bars repeatedly. Symbol retained in requested union, unavailable for analysis.",
+      "sourceUrl": "https://ir.nuburu.net/news-and-presentations/news-details/2026/NUBURU-Announces-1-for-40-Reverse-Stock-Split-to-Support-Return-to-Trading-on-NYSE-American/default.aspx"
+    },
+    {
+      "symbol": "WHLR",
+      "reason": "Provider repeatedly mixes 9-fold split-adjusted/unadjusted bars before actual Sep22 split (Sep14 3.294,Sep15 .351,Sep16 .383,Sep17 3.393). Legal Sep22 action already recorded; no consistent free replacement certified.",
+      "sourceUrl": "https://www.nasdaqtrader.com/TraderNews.aspx?id=ECA2026-666"
+    }
+  ],
+  "exchanges": [
+    {
+      "symbol": "LBRDA",
+      "targetSymbol": "CHTR",
+      "date": "2026-08-20",
+      "shareRatio": 0.236,
+      "sourceUrl": "https://www.nasdaqtrader.com/TraderNews.aspx?id=ECA2026-577",
+      "legalSourceUrl": "https://www.sec.gov/Archives/edgar/data/1091667/000114036126033909/ef20080687_8k.htm",
+      "reason": "Mandatory exchange effective before open Aug20; original last trading Aug19; retain fractional research shares at market value."
+    },
+    {
+      "symbol": "ACVA",
+      "targetSymbol": null,
+      "date": "2026-10-16",
+      "cashPerShare": 10.5,
+      "settlementDate": null,
+      "sourceUrl": "https://www.sec.gov/Archives/edgar/data/900075/000119312526423478/d129535d8k.htm",
+      "retrievedAt": "2026-10-20",
+      "reason": "Completed cash acquisition before open; legal entitlement, settlement date unverified"
+    }
+  ],
+  "splitCorrections": [
+    {
+      "symbol": "DUKR",
+      "date": "2026-03-06",
+      "ratio": 0.04,
+      "sourceUrl": "https://www.sec.gov/Archives/edgar/data/1638911/000121390026024093/ea027950501ex99-1.htm",
+      "reason": "Confirmed 25-for-1 reverse split; original provider action missing. Same USD equity before and after OTC uplisting."
+    },
+    {
+      "symbol": "NEXR",
+      "date": "2024-11-20",
+      "ratio": 0.07692307692307693,
+      "sourceUrl": "https://rss.globenewswire.com/news-release/2024/11/19/2983745/0/en/jeffs-brands-expects-implementation-of-1-for-13-reverse-share-split-after-market-today.html",
+      "reason": "Then JFBR; split trading Nov20 after Nov19 effective consolidation."
+    },
+    {
+      "symbol": "BVC",
+      "date": "2026-01-05",
+      "ratio": 0.1,
+      "sourceUrl": "https://m.nasdaqtrader.com/TraderNews.aspx?id=ECA2026-3",
+      "reason": "Mandatory one ordinary share per ten ADRs. Provider did not neutralize units; preserve genuine price change after legal exchange."
+    }
+  ],
+  "policyVersion": "reviewed-market-policy-2026-10-20-v1",
+  "reviewedThrough": "2026-10-16",
+  "reconciliation": "Reapply documented evidence to each new primary snapshot; skip already matching provider splits and quotes, reject changed adjustment basis or conflicting source evidence. No automatically guessed marks.",
+  "maxHistoricalNavRevision": 0.001
+}

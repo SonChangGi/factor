@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from momentum_factor_lab.config import RunConfig
-from momentum_factor_lab.workflow import AnalysisResult, run_analysis
+from factor_lab.config import RunConfig
+from factor_lab.workflow import AnalysisResult, run_analysis
 
 
 @pytest.fixture(scope="session")

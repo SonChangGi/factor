@@ -4,23 +4,23 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
-  <title>모멘텀 팩터 랩</title>
+  <title>Factor</title>
   <script>
     (() => {let theme;try {theme=localStorage.getItem('quant-research-theme');}catch(_){} if(!['light','dark'].includes(theme))theme=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.dataset.theme=theme;})();
   </script>
   <link rel="stylesheet" href="assets/styles.css">
   <link rel="stylesheet" href="assets/shared-nav.css">
   <link rel="stylesheet" href="assets/integrated.css?v=42b1d3e9ebd1">
-  <script defer src="assets/integrated_charts.js?v=1d138749eb59"></script>
-  <script defer src="assets/integrated.js?v=8c0a15e12b49"></script>
-</head>
+  <script defer src="assets/integrated_charts.js?v=1204f5250656"></script>
+  <script defer src="assets/integrated.js?v=84a303a915c6"></script>
+<link rel="stylesheet" href="https://sonchanggi.github.io/quant-dashboard/shared/navigation/v1/nav.css"><script defer src="https://sonchanggi.github.io/quant-dashboard/shared/navigation/v1/nav.js" data-quant-project="factor"></script></head>
 <body id="top" class="has-quant-shared-nav integrated-app">
 <a class="skip-link" href="#main-content">본문으로 건너뛰기</a>
 <nav class="site-nav quant-shared-nav" aria-label="연결 프로젝트 바로가기"><div class="quant-shared-nav__inner">
   <a class="quant-shared-nav__brand" href="https://sonchanggi.github.io/quant-dashboard/">Quant Research Hub</a>
   <div class="site-nav-links quant-shared-nav__links" aria-label="프로젝트 목록">
     <a class="quant-shared-nav__link" href="https://sonchanggi.github.io/fearNgreed/">Fear &amp; Greed</a>
-    <a class="quant-shared-nav__link is-active" href="./" aria-current="page">Momentum</a>
+    <a class="quant-shared-nav__link is-active" href="./" aria-current="page">Factor</a>
     <a class="quant-shared-nav__link" href="https://sonchanggi.github.io/dram-price/">DRAM</a>
     <a class="quant-shared-nav__link" href="https://sonchanggi.github.io/etf-tracking/">ETF</a>
     <a class="quant-shared-nav__link" href="https://sonchanggi.github.io/sox/">SOX</a>
@@ -32,7 +32,7 @@
   <button id="theme-toggle" class="theme-toggle quant-shared-nav__theme" type="button" aria-label="다크 모드로 전환" aria-pressed="false"><span class="theme-toggle-icon" aria-hidden="true"></span></button>
 </div></nav>
 <main id="main-content" tabindex="-1" class="lab-shell">
-  <header class="lab-heading"><div><p class="lab-eyebrow">Quant Research · Factor Lab</p><h1>모멘텀 팩터 랩</h1></div><div class="lab-context"><span id="data-date">기준일 —</span><span class="lab-badge" id="result-state">불러오는 중</span></div></header>
+  <header class="lab-heading"><div><p class="lab-eyebrow">Quant Research · Factor Lab</p><h1>Factor</h1></div><div class="lab-context"><span id="data-date">기준일 —</span><span class="lab-badge" id="result-state">불러오는 중</span></div></header>
   <nav class="lab-tabs" aria-label="팩터 랩 화면">
     <a href="#current" data-view="current" aria-current="page">현재 선택</a><a href="#factor" data-view="factor">단일 팩터</a><a href="#explore" data-view="explore">팩터 탐색</a><a href="#compare" data-view="compare">비교 <span id="compare-count">0</span></a><a href="#experiments" data-view="experiments">실험</a><a href="#data" data-view="data">데이터</a>
   </nav>
@@ -52,7 +52,7 @@
     </div><section class="lab-panel"><h2>실험 이력</h2><div id="experiment-history"><div id="experiment-jobs"></div><div id="experiment-stress"></div></div></section>
   </section>
   <section id="view-data" class="lab-view" aria-label="데이터" hidden><div id="data-content"></div></section>
-  <footer class="lab-footer"><span>Momentum Factor Lab</span><button id="export-result" class="lab-text-button" type="button">실행 결과 JSON</button></footer>
+  <footer class="lab-footer"><span>Factor</span><button id="export-result" class="lab-text-button" type="button">실행 결과 JSON</button></footer>
 </main>
 <noscript><p>이 결과를 보려면 JavaScript를 켜주세요.</p></noscript>
 </body></html>

@@ -393,7 +393,7 @@ def collect_integrated_market(output_dir: Path, start="2010-01-01", end=None, sy
                         repair=False,
                         keepna=True,
                         progress=False,
-                        threads=4,
+                        threads=False,
                         timeout=30,
                         group_by="column",
                     )

@@ -616,7 +616,10 @@ def run_integrated_analysis(market, config=None, factors=None, *, progress_callb
         generatedAt=datetime.now(timezone.utc).isoformat(),
     )
     if config.run_stress:
-        output["research"]["stress"] = run_stress_suite(market, config, panels)
+        output["research"]["stress"] = run_stress_suite(
+            market, config, panels, frozen_targets=selected_targets,
+            source_result_id=output["resultIdentity"]["resultId"],
+        )
     annotate_metric_states(output)
     return clean(output)
 
@@ -712,7 +715,35 @@ def build_research(returns, signals, holdings, factors, config, interval_session
     )
 
 
-def run_stress_suite(market, config, factors=None):
+def frozen_choice_delay_stress(market, config, targets, source_result_id=None):
+    """Delay the original orders without re-ranking factors or changing targets."""
+    from dataclasses import replace
+    delayed = replace(config, execution_delay_sessions=2, run_stress=False,
+                      bootstrap_repetitions=0)
+    index = market.prices.index
+    index = index[(index >= pd.Timestamp(config.start_date)) &
+                  (index <= pd.Timestamp(config.end_date) if config.end_date else True)]
+    prices = market.prices.loc[index]
+    rc = RunConfig(start_date=config.start_date, end_date=config.end_date,
+                   top_n=config.top_n, max_weight=config.max_weight,
+                   transaction_cost_bps=config.transaction_cost_bps,
+                   slippage_bps=config.slippage_bps,
+                   evaluation_window_days=config.evaluation_window_days)
+    book = run_factor_backtest(
+        "MONTHLY_SELECTION", FIXED_WEIGHTING_POLICY, prices,
+        pd.DataFrame(0., index=index, columns=prices.columns), rc,
+        signal_targets=targets, execution_delay_sessions=2,
+        **backtest_inputs(market, index),
+    )
+    nav, drawdown = performance(book.returns)
+    return dict(id="fixed_choice_delay2", settings=dict(execution_delay_sessions=2),
+                effectiveSettings=asdict(delayed), metrics=metrics(book.returns, book.return_interval_sessions),
+                nav=nav, drawdown=drawdown, status="available",
+                sourceResultId=source_result_id,
+                selectionPolicy="frozen_original_monthly_targets")
+
+
+def run_stress_suite(market, config, factors=None, *, frozen_targets=None, source_result_id=None):
     from dataclasses import replace
 
     scenarios = [
@@ -723,20 +754,33 @@ def run_stress_suite(market, config, factors=None):
         ("top30", dict(top_n=30)),
         ("equal", dict(weighting="equal")),
     ]
+    # Standalone callers can request stresses without an in-memory base run.
+    # The normal integrated path passes its original TargetAllocation objects,
+    # so it neither reconstructs actual holdings as targets nor recomputes the
+    # monthly choices for the frozen experiment.
+    if frozen_targets is None:
+        base = run_integrated_analysis(
+            market, replace(config, run_stress=False, bootstrap_repetitions=0), factors)
+        source_result_id = source_result_id or base["resultIdentity"]["resultId"]
+        frozen_targets = {
+            pd.Timestamp(row["signalDate"]): TargetAllocation(
+                FIXED_WEIGHTING_POLICY, pd.Timestamp(row["signalDate"]),
+                rows=pd.DataFrame(row["targetHoldings"]), status="available")
+            for row in base["selection"]["history"] if row["status"] in ("selected", "cash")
+        }
     results = []
     for name, change in scenarios:
-        run = run_integrated_analysis(
-            market, replace(config, **change, run_stress=False, bootstrap_repetitions=0), factors
-        )
-        results.append(
-            dict(
-                id=name,
-                settings=change,
-                metrics=run["selection"]["metrics"],
-                nav=run["selection"]["nav"],
-                status="available",
-            )
-        )
+        effective = replace(config, **change, run_stress=False, bootstrap_repetitions=0)
+        run = run_integrated_analysis(market, effective, factors)
+        results.append(dict(
+            id=name, settings=change, effectiveSettings=asdict(effective),
+            metrics=run["selection"]["metrics"], nav=run["selection"]["nav"],
+            drawdown=run["selection"]["drawdown"], status="available",
+            sourceResultId=source_result_id,
+            sourceRunResultId=run["resultIdentity"]["resultId"],
+            selectionPolicy="reevaluated_monthly_candidates",
+        ))
+    results.insert(2, frozen_choice_delay_stress(market, config, frozen_targets, source_result_id))
     return results
 
 

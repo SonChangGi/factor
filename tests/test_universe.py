@@ -1,4 +1,4 @@
-from momentum_factor_lab.universe import (
+from factor_lab.universe import (
     DEFAULT_UNIVERSE,
     DEFAULT_UNIVERSE_PATH,
     NASDAQ_LISTED_URL,
@@ -195,7 +195,7 @@ def test_public_universe_refresh_combined_output_is_stock_only(monkeypatch, tmp_
             "retries": 0,
         }
 
-    monkeypatch.setattr("momentum_factor_lab.universe._fetch_text_with_cache", fake_fetch)
+    monkeypatch.setattr("factor_lab.universe._fetch_text_with_cache", fake_fetch)
 
     result = build_public_universe_frame(cache_dir=tmp_path)
 
@@ -234,7 +234,7 @@ def test_public_universe_refresh_urls_are_https(monkeypatch, tmp_path):
             "retries": 0,
         }
 
-    monkeypatch.setattr("momentum_factor_lab.universe._fetch_text_with_cache", fake_fetch)
+    monkeypatch.setattr("factor_lab.universe._fetch_text_with_cache", fake_fetch)
 
     build_public_universe_frame(cache_dir=tmp_path)
 
@@ -267,7 +267,7 @@ def test_fetch_text_with_cache_refetches_stale_universe_cache(monkeypatch, tmp_p
     fresh_payload = "fresh payload"
 
     monkeypatch.setattr(
-        "momentum_factor_lab.universe.urlopen",
+        "factor_lab.universe.urlopen",
         lambda request, timeout=30: _FakeResponse(fresh_payload),
     )
 
@@ -293,7 +293,7 @@ def test_fetch_text_with_cache_uses_fresh_cache_without_network(monkeypatch, tmp
     def fail_network(*args, **kwargs):
         raise AssertionError("network should not be called for fresh cache")
 
-    monkeypatch.setattr("momentum_factor_lab.universe.urlopen", fail_network)
+    monkeypatch.setattr("factor_lab.universe.urlopen", fail_network)
 
     text, source = _fetch_text_with_cache(
         "https://example.test/fresh.txt",
@@ -347,7 +347,7 @@ def test_public_universe_refresh_records_partial_source_without_pit(monkeypatch,
             "retries": 0,
         }
 
-    monkeypatch.setattr("momentum_factor_lab.universe._fetch_text_with_cache", fake_fetch)
+    monkeypatch.setattr("factor_lab.universe._fetch_text_with_cache", fake_fetch)
 
     result = build_public_universe_frame(cache_dir=tmp_path, user_agent="test contact@example.com")
 
@@ -397,7 +397,7 @@ def test_public_universe_refresh_surfaces_stale_cache_status(monkeypatch, tmp_pa
             "retries": 0,
         }
 
-    monkeypatch.setattr("momentum_factor_lab.universe._fetch_text_with_cache", fake_fetch)
+    monkeypatch.setattr("factor_lab.universe._fetch_text_with_cache", fake_fetch)
 
     result = build_public_universe_frame(cache_dir=tmp_path)
 

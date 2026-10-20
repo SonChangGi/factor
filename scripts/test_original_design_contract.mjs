@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-const html = readFileSync("momentum_factor_lab/web/index.html", "utf8");
-const css = readFileSync("momentum_factor_lab/web/styles.css", "utf8");
+const html = readFileSync("factor_lab/web/index.html", "utf8");
+const css = readFileSync("factor_lab/web/styles.css", "utf8");
 
-assert.match(html, /모멘텀 팩터 랩/);
+assert.match(html, /Factor/);
 assert.match(html, /팩터 점수 70% · 후행 거래대금 30%/);
 assert.match(html, /class="core-research-inputs"/);
 assert.match(html, /<details id="advanced-research-inputs"/);

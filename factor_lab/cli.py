@@ -391,7 +391,7 @@ def _add_run_arguments(run: argparse.ArgumentParser) -> None:
     output = run.add_argument_group("outputs and reproducibility")
     output.add_argument("--output-dir", type=Path, default=Path("outputs/sample"))
     output.add_argument("--site-dir", type=Path, default=Path("docs"))
-    output.add_argument("--cache-dir", type=Path, default=Path(".cache/momentum_factor_lab"))
+    output.add_argument("--cache-dir", type=Path, default=Path(".cache/factor_lab"))
     output.add_argument(
         "--export-input-snapshot",
         action=argparse.BooleanOptionalAction,
@@ -404,7 +404,7 @@ def _add_run_arguments(run: argparse.ArgumentParser) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="momentum-factor-lab",
+        prog="factor",
         description=(
             "Compare momentum factors from live public data, reviewed local files, or a "
             "deterministic demo. This research application does not place orders."
@@ -471,7 +471,7 @@ def build_parser() -> argparse.ArgumentParser:
     scheduled.add_argument(
         "--config",
         type=Path,
-        default=Path(".github/momentum-dashboard-config.json"),
+        default=Path(".github/factor-dashboard-config.json"),
     )
     scheduled.add_argument("--site-dir", type=Path, help="Override config site_dir")
     scheduled.add_argument("--title", help="Override config title")

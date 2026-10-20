@@ -3,8 +3,8 @@ from types import SimpleNamespace
 
 import pandas as pd
 import pytest
-from momentum_factor_lab.config import RunConfig
-from momentum_factor_lab.live_data import _repair_yfinance_latest_session
+from factor_lab.config import RunConfig
+from factor_lab.live_data import _repair_yfinance_latest_session
 
 
 def history():

@@ -480,7 +480,7 @@ wheels = [
 ]
 
 [[package]]
-name = "momentum-factor-lab"
+name = "factor"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

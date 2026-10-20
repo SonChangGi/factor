@@ -34,7 +34,7 @@ PREVIOUS_CONTROL_INPUT_SCHEMA_VERSION = "momentum/v2"
 CONTROL_CONFIG_HASH_ALGORITHM = "momentum-research-inputs-rfc8785-v1"
 CONTROL_ARTIFACT_CONTRACT_VERSION = "momentum/schema-v5-control-result-v1"
 CONTROL_ARTIFACT_DIRECTORY = PurePosixPath("data/control-runs/v1")
-DEFAULT_PUBLIC_SITE_URL = "https://sonchanggi.github.io/momentum-factor-lab/"
+DEFAULT_PUBLIC_SITE_URL = "https://sonchanggi.github.io/factor/"
 
 _SAFE_CONTROL_RUN_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{7,127}$")
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
@@ -558,7 +558,7 @@ def _parse_json_object(value: str) -> dict[str, Any]:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="python -m momentum_factor_lab.control_run",
+        prog="python -m factor_lab.control_run",
         description="Run the existing Momentum Python engine for one bound remote request.",
     )
     parser.add_argument("--research-inputs-json", required=True)
@@ -576,7 +576,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--config",
         type=Path,
-        default=Path(".github/momentum-dashboard-config.json"),
+        default=Path(".github/factor-dashboard-config.json"),
     )
     parser.add_argument("--site-dir", type=Path, default=Path("docs"))
     parser.add_argument(

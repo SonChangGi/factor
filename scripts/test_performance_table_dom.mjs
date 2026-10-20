@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import vm from "node:vm";
 
 const payload = JSON.parse(readFileSync(process.env.MFL_TEST_PAYLOAD, "utf8"));
-const source = readFileSync("momentum_factor_lab/web/dashboard.js", "utf8");
+const source = readFileSync("factor_lab/web/dashboard.js", "utf8");
 const context = vm.createContext({ console, setTimeout, TextDecoder, TextEncoder, URL, URLSearchParams });
 vm.runInContext(source, context, { filename: "dashboard.js" });
 const api = context.__MFL_WEB_TESTS__;

@@ -188,5 +188,5 @@ function bind({charts, root, palette, finite, fmt, linePath, chartTicks, endpoin
 
 const api = {bind};
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
-if (scope) scope.MomentumCharts = api;
+if (scope) { scope.FactorCharts = api; scope.MomentumCharts = api; }
 })(typeof window !== 'undefined' ? window : null);

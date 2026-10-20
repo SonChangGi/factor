@@ -7,8 +7,8 @@ from urllib.parse import parse_qs, urlparse
 import pandas as pd
 import pytest
 
-from momentum_factor_lab.config import RunConfig
-from momentum_factor_lab import live_data
+from factor_lab.config import RunConfig
+from factor_lab import live_data
 
 
 def inputs():

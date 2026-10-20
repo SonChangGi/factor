@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from momentum_factor_lab.config import MAX_TOP_N, RunConfig, WEIGHTING_POLICIES
-from momentum_factor_lab.research_inputs import ResearchInputs
+from factor_lab.config import MAX_TOP_N, RunConfig, WEIGHTING_POLICIES
+from factor_lab.research_inputs import ResearchInputs
 
 
 def test_implicit_end_date_is_frozen_across_midnight_and_preset_copies(monkeypatch) -> None:
@@ -16,7 +16,7 @@ def test_implicit_end_date_is_frozen_across_midnight_and_preset_copies(monkeypat
         def now(cls, tz=None):
             return cls.current.astimezone(tz)
 
-    monkeypatch.setattr("momentum_factor_lab.config.datetime", Clock)
+    monkeypatch.setattr("factor_lab.config.datetime", Clock)
     config = RunConfig(live=True)
     Clock.current = datetime(2026, 9, 18, 0, 0, 1, tzinfo=UTC)
 
@@ -39,7 +39,7 @@ def test_new_run_refreshes_implicit_date_without_changing_ongoing_run(monkeypatc
         def now(cls, tz=None):
             return cls.current.astimezone(tz)
 
-    monkeypatch.setattr("momentum_factor_lab.config.datetime", Clock)
+    monkeypatch.setattr("factor_lab.config.datetime", Clock)
     ongoing = RunConfig(live=True)
     Clock.current = datetime(2026, 9, 18, 0, 0, 1, tzinfo=UTC)
     next_run = ongoing.for_new_run()

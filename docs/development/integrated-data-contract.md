@@ -6,7 +6,7 @@
 
 2026-10-16 공개 실행의 요청 목록을 동결했다. Momentum 2,865종목과 Best 1,766종목의 교집합은 1,671종목이며, 합집합은 **2,960종목**이다. Best에서 추가된 종목은 95개다. SPY·QQQ·Nasdaq 지수는 별도 비교용 세 열이며 투자 적격성은 항상 거짓이다.
 
-[유니버스 원장](../../momentum_factor_lab/resources/integrated_universe.json)은 공급자 ticker, 프로젝트별 포함 여부, 식별자 정규화와 공개 목록의 URL·SHA-256을 보존한다. 현재 2,960개 식별자는 이미 Yahoo 형식이며 중복 변환이 없다. 기존 Momentum 목록의 종목 분류를 계승하고, 추가 종목의 미확인 분류는 임의로 확정하지 않는다.
+[유니버스 원장](../../factor_lab/resources/integrated_universe.json)은 공급자 ticker, 프로젝트별 포함 여부, 식별자 정규화와 공개 목록의 URL·SHA-256을 보존한다. 현재 2,960개 식별자는 이미 Yahoo 형식이며 중복 변환이 없다. 기존 Momentum 목록의 종목 분류를 계승하고, 추가 종목의 미확인 분류는 임의로 확정하지 않는다.
 
 ```text
 무료 공급자 OHLCV·조정종가·분할·배당
@@ -58,7 +58,7 @@ as_traded_volume[t] = provider_volume[t] / F[t]
 - 각 행렬의 SHA-256과 전체 manifest의 입력 ID를 읽을 때 검증한다. 완료된 경로를 덮어쓰지 않으며 변경된 입력은 새 스냅샷으로 만든다. `parentSnapshotId`로 원본·복원·품질 스냅샷을 연결한다.
 - XNYS 달력(`exchange_calendars 4.13.2`)과 전체 관측일을 대조했다. 기대 거래일과 실제 거래일이 모두 4,223개로 누락·추가가 없다.
 - [최종 데이터 검증](../../outputs/integration/data-validation.json)은 해시·달력·합집합·누락 분류·OHLC 격리·거래대금 보존·분할 경계를 검사하며 `passed: true`다. [품질 처리 전 발견 사항](../../outputs/integration/data-validation-as-traded-prequality.json)도 남겼다.
-- [기존 회계 회귀 검사](../../outputs/integration/original-parity.json)는 같은 원자료를 원래 Momentum 2,865종목으로 먼저 투영하고 기존 적격성·수식을 적용했다. 로컬 HEAD의 62개 정의에서 기존 자동 목표 생성과 새 명시적 목표 주입의 수익·NAV·비중·현금·비용·거래 상태가 정확히 일치했다. 공개 메타데이터 64개와 로컬 실행 정의 62개를 동일한 범위로 주장하지 않는다. 추가 공개 정의 두 개를 포함한 대응은 [기존 정의 원장](../../momentum_factor_lab/resources/integrated_legacy_map.json)에 있다.
+- [기존 회계 회귀 검사](../../outputs/integration/original-parity.json)는 같은 원자료를 원래 Momentum 2,865종목으로 먼저 투영하고 기존 적격성·수식을 적용했다. 로컬 HEAD의 62개 정의에서 기존 자동 목표 생성과 새 명시적 목표 주입의 수익·NAV·비중·현금·비용·거래 상태가 정확히 일치했다. 공개 메타데이터 64개와 로컬 실행 정의 62개를 동일한 범위로 주장하지 않는다. 추가 공개 정의 두 개를 포함한 대응은 [기존 정의 원장](../../factor_lab/resources/integrated_legacy_map.json)에 있다.
 
 거래 당시 $5 조건의 복원은 회계 회귀와 별개의 의도적인 변경이다. 과거 적격성 57,579개 날짜·종목 셀이 바뀌었고 최종일 적격 종목 수는 같았다. 이는 수익률 개선을 위한 조정이 아니라 이후 분할이 과거 가격 조건에 영향을 주지 않게 하는 수정이다.
 

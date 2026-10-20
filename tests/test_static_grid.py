@@ -7,18 +7,18 @@ from pathlib import Path
 
 import pytest
 
-from momentum_factor_lab.config import WEIGHTING_POLICIES
-from momentum_factor_lab.data import canonical_records_sha256
-from momentum_factor_lab.dashboard import (
+from factor_lab.config import WEIGHTING_POLICIES
+from factor_lab.data import canonical_records_sha256
+from factor_lab.dashboard import (
     MAX_DASHBOARD_BYTES,
     dashboard_summary,
     externalize_factor_holding_history_sidecar,
 )
-from momentum_factor_lab.identity import (
+from factor_lab.identity import (
     canonical_json_bytes,
     canonical_sha256,
 )
-from momentum_factor_lab.static_grid import (
+from factor_lab.static_grid import (
     MAX_STATIC_GRID_ENTRIES,
     STATIC_GRID_CONTRACT,
     STATIC_GRID_VERSION,
@@ -31,7 +31,7 @@ from momentum_factor_lab.static_grid import (
     validate_static_grid,
     write_static_grid,
 )
-from momentum_factor_lab.workflow import (
+from factor_lab.workflow import (
     MAX_FACTOR_HOLDING_HISTORY_SIDECAR_BYTES,
     PERFORMANCE_CONTRACT_VERSION,
     AnalysisResult,
@@ -674,7 +674,7 @@ def test_rejects_sidecar_larger_than_publication_limit_before_writing(
         return public_detail, oversized
 
     monkeypatch.setattr(
-        "momentum_factor_lab.static_grid.externalize_factor_holding_history_sidecar",
+        "factor_lab.static_grid.externalize_factor_holding_history_sidecar",
         oversized_externalize,
     )
     data_dir = tmp_path / "data"

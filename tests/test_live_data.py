@@ -11,8 +11,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from momentum_factor_lab.config import RunConfig
-from momentum_factor_lab.live_data import (
+from factor_lab.config import RunConfig
+from factor_lab.live_data import (
     _apply_finance_datareader_fallback,
     _apply_nasdaq_latest_repair,
     _apply_stooq_fallback,
@@ -384,7 +384,7 @@ def test_stooq_fallback_records_symbol_provider_and_cache(monkeypatch, tmp_path)
         volume = pd.Series(1000, index=dates, name=symbol)
         return price, volume, None, "cache_hit", str(tmp_path / "cached.csv"), 0
 
-    monkeypatch.setattr("momentum_factor_lab.live_data._download_stooq_symbol", fake_download)
+    monkeypatch.setattr("factor_lab.live_data._download_stooq_symbol", fake_download)
     prices, volumes, sources = _apply_stooq_fallback(
         pd.DataFrame(index=dates), pd.DataFrame(index=dates), ["MISS"], config
     )
@@ -411,7 +411,7 @@ def test_stooq_fallback_defaults_to_all_missing_symbols(monkeypatch, tmp_path):
         volume = pd.Series(1000, index=dates, name=symbol)
         return price, volume, None, "fetched", str(tmp_path / f"{symbol}.csv"), 0
 
-    monkeypatch.setattr("momentum_factor_lab.live_data._download_stooq_symbol", fake_download)
+    monkeypatch.setattr("factor_lab.live_data._download_stooq_symbol", fake_download)
     prices, volumes, sources = _apply_stooq_fallback(
         pd.DataFrame(index=dates),
         pd.DataFrame(index=dates),
@@ -440,7 +440,7 @@ def test_stooq_fallback_replaces_unusable_existing_column(monkeypatch, tmp_path)
         volume = pd.Series(5_000, index=dates, name=symbol)
         return price, volume, None, "fetched", str(tmp_path / f"{symbol}.csv"), 0
 
-    monkeypatch.setattr("momentum_factor_lab.live_data._download_stooq_symbol", fake_download)
+    monkeypatch.setattr("factor_lab.live_data._download_stooq_symbol", fake_download)
 
     fixed_prices, fixed_volumes, sources = _apply_stooq_fallback(prices, volumes, ["BAD"], config)
 
@@ -468,7 +468,7 @@ def test_yahoo_chart_fallback_repairs_stale_yfinance_column(monkeypatch, tmp_pat
         volume = pd.Series(2_000_000, index=dates, name=symbol)
         return price, volume, None, "fetched", str(tmp_path / f"{symbol}.csv"), 0
 
-    monkeypatch.setattr("momentum_factor_lab.live_data._download_yahoo_chart_symbol", fake_download)
+    monkeypatch.setattr("factor_lab.live_data._download_yahoo_chart_symbol", fake_download)
 
     fixed_prices, fixed_volumes, sources = _apply_yahoo_chart_fallback(
         prices, volumes, ["STALE"], config
@@ -538,7 +538,7 @@ def test_nasdaq_latest_repair_fills_only_missing_tail_dates(monkeypatch, tmp_pat
         volume = pd.Series(3_000_000, index=dates, name=symbol)
         return price, volume, None, "fetched", str(tmp_path / f"{symbol}.csv"), 0
 
-    monkeypatch.setattr("momentum_factor_lab.live_data._download_nasdaq_symbol", fake_download)
+    monkeypatch.setattr("factor_lab.live_data._download_nasdaq_symbol", fake_download)
 
     fixed_prices, fixed_volumes, sources = _apply_nasdaq_latest_repair(
         prices, volumes, ["TAIL"], config
@@ -571,7 +571,7 @@ def test_nasdaq_latest_repair_requires_existing_adjusted_history(monkeypatch, tm
         raise AssertionError(f"Nasdaq full-history replacement should not run for {symbol}")
 
     monkeypatch.setattr(
-        "momentum_factor_lab.live_data._download_nasdaq_symbol", unexpected_download
+        "factor_lab.live_data._download_nasdaq_symbol", unexpected_download
     )
 
     fixed_prices, fixed_volumes, sources = _apply_nasdaq_latest_repair(
@@ -606,7 +606,7 @@ def test_finance_datareader_fallback_records_symbol_provider(monkeypatch, tmp_pa
         return price, volume, None, "fetched", str(tmp_path / f"{symbol}.csv"), 0
 
     monkeypatch.setattr(
-        "momentum_factor_lab.live_data._download_finance_datareader_symbol", fake_download
+        "factor_lab.live_data._download_finance_datareader_symbol", fake_download
     )
     prices, volumes, sources = _apply_finance_datareader_fallback(
         pd.DataFrame(index=dates),
@@ -683,7 +683,7 @@ def test_live_download_preserves_yfinance_yahoo_chart_stooq_finance_datareader_o
     )
     candidate = _candidate_frame(["YF", "YCH", "STQ", "FDRX"])
     monkeypatch.setattr(
-        "momentum_factor_lab.live_data._candidate_universe",
+        "factor_lab.live_data._candidate_universe",
         lambda _: (
             candidate,
             pd.DataFrame([{"source": "fixture-universe", "status": "loaded", "records": 4}]),
@@ -755,13 +755,13 @@ def test_live_download_preserves_yfinance_yahoo_chart_stooq_finance_datareader_o
             0,
         )
 
-    monkeypatch.setattr("momentum_factor_lab.live_data._download_yfinance", fake_yfinance)
+    monkeypatch.setattr("factor_lab.live_data._download_yfinance", fake_yfinance)
     monkeypatch.setattr(
-        "momentum_factor_lab.live_data._download_yahoo_chart_symbol", fake_yahoo_chart
+        "factor_lab.live_data._download_yahoo_chart_symbol", fake_yahoo_chart
     )
-    monkeypatch.setattr("momentum_factor_lab.live_data._download_stooq_symbol", fake_stooq)
+    monkeypatch.setattr("factor_lab.live_data._download_stooq_symbol", fake_stooq)
     monkeypatch.setattr(
-        "momentum_factor_lab.live_data._download_finance_datareader_symbol", fake_fdr
+        "factor_lab.live_data._download_finance_datareader_symbol", fake_fdr
     )
 
     result = download_live_data(config)
@@ -805,7 +805,7 @@ def test_live_download_attempts_free_fallback_when_yfinance_unavailable(monkeypa
     )
     candidate = _candidate_frame(["AAA"])
     monkeypatch.setattr(
-        "momentum_factor_lab.live_data._candidate_universe",
+        "factor_lab.live_data._candidate_universe",
         lambda _: (
             candidate,
             pd.DataFrame([{"source": "fixture-universe", "status": "loaded", "records": 1}]),
@@ -823,7 +823,7 @@ def test_live_download_attempts_free_fallback_when_yfinance_unavailable(monkeypa
             0,
         )
 
-    monkeypatch.setattr("momentum_factor_lab.live_data._download_stooq_symbol", fake_stooq)
+    monkeypatch.setattr("factor_lab.live_data._download_stooq_symbol", fake_stooq)
 
     result = download_live_data(config)
 
@@ -843,7 +843,7 @@ def test_live_download_attempts_free_fallback_when_yfinance_unavailable(monkeypa
 
 
 def test_yfinance_chunk_uses_csv_json_price_cache_without_network(tmp_path):
-    from momentum_factor_lab.live_data import (
+    from factor_lab.live_data import (
         _download_yfinance_chunk,
         _price_cache_path,
         _write_price_cache,
@@ -877,7 +877,7 @@ def test_yfinance_chunk_uses_csv_json_price_cache_without_network(tmp_path):
 
 
 def test_yfinance_cache_v3_records_hashes_timestamps_asof_and_symbols(tmp_path):
-    from momentum_factor_lab.live_data import (
+    from factor_lab.live_data import (
         PRICE_CACHE_VERSION,
         _price_cache_component_paths,
         _price_cache_path,
@@ -934,7 +934,7 @@ def test_yfinance_cache_v3_records_hashes_timestamps_asof_and_symbols(tmp_path):
 
 
 def test_yfinance_cache_same_asof_content_mutation_changes_component_identity(tmp_path):
-    from momentum_factor_lab.live_data import (
+    from factor_lab.live_data import (
         _price_cache_path,
         _read_price_cache,
         _write_price_cache,
@@ -982,7 +982,7 @@ def test_yfinance_cache_same_asof_content_mutation_changes_component_identity(tm
 
 
 def test_yfinance_component_tampering_bypasses_cache_and_refetches(monkeypatch, tmp_path):
-    from momentum_factor_lab.live_data import (
+    from factor_lab.live_data import (
         _download_yfinance_chunk,
         _price_cache_component_paths,
         _price_cache_path,
@@ -1039,7 +1039,7 @@ def test_yfinance_component_tampering_bypasses_cache_and_refetches(monkeypatch, 
 
 @pytest.mark.parametrize(("refresh", "stale"), [(True, False), (False, True)])
 def test_yfinance_refresh_flag_and_ttl_bypass_cache(monkeypatch, tmp_path, refresh, stale):
-    from momentum_factor_lab.live_data import (
+    from factor_lab.live_data import (
         _download_yfinance_chunk,
         _price_cache_path,
         _write_price_cache,
@@ -1093,7 +1093,7 @@ def test_yfinance_refresh_flag_and_ttl_bypass_cache(monkeypatch, tmp_path, refre
 def test_single_symbol_fallback_refresh_flag_and_ttl_bypass_cache(
     monkeypatch, tmp_path, refresh, stale
 ):
-    from momentum_factor_lab.live_data import _download_stooq_symbol
+    from factor_lab.live_data import _download_stooq_symbol
 
     config = RunConfig(
         cache_dir=tmp_path,
@@ -1128,7 +1128,7 @@ def test_single_symbol_fallback_refresh_flag_and_ttl_bypass_cache(
         calls.append((args, kwargs))
         return Response()
 
-    monkeypatch.setattr("momentum_factor_lab.live_data.urlopen", fake_urlopen)
+    monkeypatch.setattr("factor_lab.live_data.urlopen", fake_urlopen)
 
     price, _, error, status, _, _ = _download_stooq_symbol("AAA", config)
 
@@ -1139,8 +1139,8 @@ def test_single_symbol_fallback_refresh_flag_and_ttl_bypass_cache(
 
 
 def test_yfinance_chunk_does_not_use_pickle_cache(monkeypatch, tmp_path):
-    import momentum_factor_lab.live_data as data
-    from momentum_factor_lab.live_data import _download_yfinance_chunk
+    import factor_lab.live_data as data
+    from factor_lab.live_data import _download_yfinance_chunk
 
     monkeypatch.setattr(
         pd,
@@ -1175,7 +1175,7 @@ def test_yfinance_chunk_does_not_use_pickle_cache(monkeypatch, tmp_path):
 
 
 def test_yfinance_chunk_passes_inclusive_config_end_date(monkeypatch, tmp_path):
-    from momentum_factor_lab.live_data import _download_yfinance_chunk
+    from factor_lab.live_data import _download_yfinance_chunk
 
     captured = {}
     dates = pd.bdate_range("2024-01-01", periods=3)
@@ -1218,7 +1218,7 @@ def test_yfinance_chunk_passes_inclusive_config_end_date(monkeypatch, tmp_path):
 
 
 def test_yfinance_chunk_leaves_open_ended_download_without_end(monkeypatch, tmp_path):
-    from momentum_factor_lab.live_data import _download_yfinance_chunk
+    from factor_lab.live_data import _download_yfinance_chunk
 
     captured = {}
     dates = pd.bdate_range("2024-01-01", periods=2)
@@ -1240,7 +1240,7 @@ def test_yfinance_chunk_leaves_open_ended_download_without_end(monkeypatch, tmp_
 
 
 def test_provider_summary_marks_cached_stooq_as_mixed():
-    from momentum_factor_lab.live_data import _provider_label_from_sources
+    from factor_lab.live_data import _provider_label_from_sources
 
     stooq_sources = pd.DataFrame(
         [
@@ -1301,7 +1301,7 @@ def test_provider_summary_marks_cached_stooq_as_mixed():
 
 
 def test_build_eligibility_mask_uses_rebalance_date_liquidity_and_history():
-    from momentum_factor_lab.live_data import build_eligibility_mask
+    from factor_lab.live_data import build_eligibility_mask
 
     dates = pd.bdate_range("2024-01-01", periods=80)
     prices = pd.DataFrame(

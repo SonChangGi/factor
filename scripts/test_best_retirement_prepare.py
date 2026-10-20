@@ -18,6 +18,6 @@ class RetirementPreparation(unittest.TestCase):
         nav='<nav><a href="https://example.com/spo">SPO</a><a>연구 관측소</a><button id="theme-toggle">테마</button></nav>'
         page,_=guide_page('<html><script src="app.js"></script>'+nav+'</html>','http://127.0.0.1:50073/')
         self.assertIn(nav,page);self.assertNotIn('src="app.js"',page);self.assertIn('href="http://127.0.0.1:50073/"',page)
-        with self.assertRaises(ValueError):guide_page(nav,'https://sonchanggi.github.io/momentum-factor-lab/')
+        with self.assertRaises(ValueError):guide_page(nav,'https://sonchanggi.github.io/factor/')
 
 if __name__=='__main__':unittest.main()

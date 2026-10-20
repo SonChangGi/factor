@@ -1,7 +1,7 @@
 const {JSDOM} = require('./integrated_dom_runtime.cjs');
 const assert = require('node:assert/strict');
-const {bind} = require('../momentum_factor_lab/web/integrated_charts.js');
-const {finite = value => typeof value === 'number' && Number.isFinite(value),fmt,linePath,chartTicks,endpointPositions} = require('../momentum_factor_lab/web/integrated.js');
+const {bind} = require('../factor_lab/web/integrated_charts.js');
+const {finite = value => typeof value === 'number' && Number.isFinite(value),fmt,linePath,chartTicks,endpointPositions} = require('../factor_lab/web/integrated.js');
 
 const dates = ['2026-09-28','2026-09-29','2026-09-30','2026-10-01'];
 const series = [

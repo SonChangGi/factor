@@ -1,23 +1,30 @@
-name: Daily Momentum Dashboard
+name: Daily Factor Dashboard
 
 on:
   workflow_dispatch:
     inputs:
       watchdog_origin:
-        description: Treat this queued watchdog rerun as a freshness-gated schedule
+        description: Apply completed-session freshness gating to this retry
         required: true
         default: false
         type: boolean
   schedule:
-    # 07:17 KST Tue-Sat: staggered after the completed U.S. session.
+    # 07:17 KST Tue-Sat, following completed U.S. weekday sessions.
     - cron: "17 22 * * 1-5"
 
 concurrency:
-  group: daily-momentum-dashboard-${{ github.ref }}
+  group: daily-factor-dashboard-${{ github.ref }}
   cancel-in-progress: false
 
 permissions:
   contents: read
+
+env:
+  OPENBLAS_NUM_THREADS: 1
+  OMP_NUM_THREADS: 1
+  MKL_NUM_THREADS: 1
+  VECLIB_MAXIMUM_THREADS: 1
+  NUMEXPR_NUM_THREADS: 1
 
 jobs:
   admission:
@@ -28,7 +35,7 @@ jobs:
       contents: read
       actions: read
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
       - name: Wait for earlier data pipelines
         env:
           GH_TOKEN: ${{ github.token }}
@@ -37,304 +44,177 @@ jobs:
   update-dashboard:
     needs: admission
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 350
     permissions:
       contents: write
       actions: read
     outputs:
-      pages_source_sha: ${{ steps.pages-request.outputs.source_sha }}
-      should_deploy_pages: ${{ steps.pages-request.outputs.should_deploy }}
+      source_sha: ${{ steps.publish.outputs.source_sha }}
+      should_deploy: ${{ steps.publish.outputs.should_deploy }}
       refresh_skipped: ${{ steps.freshness.outputs.skip }}
-      build_outcome: ${{ steps.build.outcome }}
-      refresh_state: ${{ steps.result.outputs.state }}
     steps:
-      - name: Check out repository
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
         with:
-          ref: ${{ github.ref_name }}
-
-      - name: Recheck admission when only failed jobs are rerun
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+      - name: Bind current production source
+        id: source
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          git fetch origin "${DEFAULT_BRANCH}" --depth=1
+          git reset --hard "origin/${DEFAULT_BRANCH}"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install locked live-data runtime
+        run: |
+          python -m pip install uv==0.11.17
+          uv sync --frozen --extra live --python "$(command -v python)"
+          echo "${GITHUB_WORKSPACE}/.venv/bin" >> "$GITHUB_PATH"
+      - name: Recheck admission on a failed-job retry
         if: github.run_attempt != '1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: python scripts/automation_admission.py --max-wait-seconds 300
-
-      - name: Refresh checkout to latest branch head
-        run: |
-          git fetch origin "${GITHUB_REF_NAME}" --depth=1
-          git reset --hard "origin/${GITHUB_REF_NAME}"
-
-      - name: Set up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
-        with:
-          python-version: '3.11'
-          cache: 'pip'
-
-      - name: Install Momentum Factor Lab with live-data extras
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e '.[live]'
-
-      - name: Decide whether dashboard refresh should run
+      - name: Check integrated completed-session freshness
         id: freshness
         env:
-          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          EVENT_NAME: ${{ github.event_name }}
           WATCHDOG_ORIGIN: ${{ inputs.watchdog_origin || false }}
         run: |
-          effective_event_name="${GITHUB_EVENT_NAME}"
-          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ] \
-            && [ "${WATCHDOG_ORIGIN}" = "true" ]; then
-            effective_event_name="schedule"
-          fi
-          python -m momentum_factor_lab.dashboard_freshness \
-            --event-name "${effective_event_name}" \
-            --data-path docs/data/dashboard.json \
-            --status-path docs/data/automation-status.json >> "$GITHUB_OUTPUT"
-
-      - name: Report skipped dashboard refresh
-        if: steps.freshness.outputs.skip == 'true'
-        run: |
-          echo "${{ steps.freshness.outputs.reason }}"
-          echo "Latest run KST: ${{ steps.freshness.outputs.latest_run_kst }}"
-          echo "Cutoff KST: ${{ steps.freshness.outputs.cutoff_kst }}"
-
-      - name: Build daily Korean dashboard
-        id: build
-        continue-on-error: true
+          set -euo pipefail
+          event="${EVENT_NAME}"
+          [[ "${WATCHDOG_ORIGIN}" != true ]] || event=schedule
+          python -m factor_lab.integrated_automation freshness \
+            --site site --event-name "${event}" >> "$GITHUB_OUTPUT"
+      - name: Collect, reconcile, calculate and validate the candidate
+        id: calculate
         if: steps.freshness.outputs.skip != 'true'
+        env:
+          SOURCE_SHA: ${{ steps.source.outputs.sha }}
+          FACTOR_INPUT_CACHE_KEY: factor-input-v1-${{ github.run_id }}-${{ github.run_attempt }}
         run: |
-          python -m momentum_factor_lab.cli scheduled-dashboard \
-            --config .github/momentum-dashboard-config.json \
-            --site-dir docs
-
-      - name: Record refresh outcome
-        id: result
-        if: always() && steps.freshness.outputs.skip != 'true'
-        run: |
-          state="$(jq -r '.state // "unknown"' docs/data/automation-status.json 2>/dev/null || echo unknown)"
-          echo "state=${state}" >> "$GITHUB_OUTPUT"
-          {
-            echo "## Momentum refresh"
-            echo "Build outcome: ${{ steps.build.outcome }}"
-            echo "Publication state: ${state}"
-            jq '{state, reasonCode, attemptedAtUtc, targetDataAsOf, analysis, publication, lastGood}' docs/data/automation-status.json
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Preserve bounded refresh diagnostics
-        if: always() && steps.freshness.outputs.skip != 'true'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+          set -euo pipefail
+          python -m factor_lab.integrated_automation run \
+            --workspace "outputs/factor-daily/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --baseline site --candidate outputs/factor-candidate --source-commit "${SOURCE_SHA}"
+      - name: Preserve immutable free-market inputs in bounded cache
+        id: input-cache
+        if: always() && steps.calculate.outcome != 'skipped'
+        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25
         with:
-          name: momentum-refresh-diagnostics-${{ github.run_id }}
+          key: factor-input-v1-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            outputs/factor-daily/${{ github.run_id }}-${{ github.run_attempt }}/raw
+            outputs/factor-daily/${{ github.run_id }}-${{ github.run_attempt }}/market
+      - name: Verify the saved input cache before promotion
+        if: success() && steps.calculate.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CACHE_KEY: factor-input-v1-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          cache_id="$(gh api "repos/${GITHUB_REPOSITORY}/actions/caches?key=${CACHE_KEY}" --jq ".actions_caches[] | select(.key == \"${CACHE_KEY}\") | .id" | head -n 1)"
+          [[ "${cache_id}" =~ ^[0-9]+$ ]] || { echo "Input cache was not saved; preserving last-good publication." >&2; exit 1; }
+          python -m factor_lab.integrated_automation confirm-input-cache \
+            --workspace "outputs/factor-daily/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --cache-key "${CACHE_KEY}" --cache-id "${cache_id}"
+      - name: Promote and commit only the validated Factor publication
+        id: publish
+        if: steps.freshness.outputs.skip != 'true'
+        env:
+          SOURCE_SHA: ${{ steps.source.outputs.sha }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          git fetch origin "${DEFAULT_BRANCH}" --depth=1
+          [[ "$(git rev-parse "origin/${DEFAULT_BRANCH}")" == "${SOURCE_SHA}" ]] || {
+            echo "Source advanced during calculation; preserving candidate without publication." >&2
+            exit 1
+          }
+          python -m factor_lab.integrated_automation promote \
+            --workspace "outputs/factor-daily/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --baseline site --candidate outputs/factor-candidate
+          python scripts/validate_integrated_publication.py site
+          python -m factor_lab.publication_security site
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- site
+          git commit -m "Update validated Factor results for ${{ steps.freshness.outputs.target_data_as_of }}"
+          # No force push or rebase of a calculated artifact onto another source.
+          git push origin "HEAD:${DEFAULT_BRANCH}"
+          echo "source_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "should_deploy=true" >> "$GITHUB_OUTPUT"
+      - name: Record refresh result
+        if: always()
+        run: |
+          status="outputs/factor-daily/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}/status.json"
+          if [[ -f "${status}" ]]; then
+            jq '{state,targetDataAsOf,dataAsOf,resultId,lastGoodPreserved,errorType,reason}' "${status}" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Refresh skipped: ${{ steps.freshness.outputs.skip }}; target close: ${{ steps.freshness.outputs.target_data_as_of }}" >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always() && steps.freshness.outputs.skip != 'true'
+        with:
+          name: factor-refresh-${{ github.run_id }}-${{ github.run_attempt }}
           retention-days: 3
           if-no-files-found: warn
           path: |
-            docs/data/automation-status.json
-            outputs/daily-dashboard/input/market_data_manifest.json
-
-      - name: Reject secrets in generated publication
-        if: steps.freshness.outputs.skip != 'true'
-        run: |
-          python -m momentum_factor_lab.publication_security docs
-
-      - name: Commit dashboard updates
-        if: steps.freshness.outputs.skip != 'true'
-        env:
-          FRESHNESS_EVENT_NAME: ${{ steps.freshness.outputs.event_name }}
-        run: |
-          candidate_source_sha="$(git rev-parse HEAD)"
-          readonly candidate_source_sha
-          validate_candidate_against_remote() {
-            git fetch origin "${GITHUB_REF_NAME}" --depth=1
-            if ! git diff --quiet "${candidate_source_sha}" "origin/${GITHUB_REF_NAME}" -- \
-              momentum_factor_lab .github/momentum-dashboard-config.json pyproject.toml uv.lock; then
-              echo "Source changed while the candidate was being computed; refusing mixed-version publication." >&2
-              exit 1
-            fi
-            remote_dashboard="${RUNNER_TEMP}/remote-dashboard.json"
-            remote_automation_status="${RUNNER_TEMP}/remote-automation-status.json"
-            if git show "origin/${GITHUB_REF_NAME}:docs/data/dashboard.json" > "${remote_dashboard}" 2>/dev/null; then
-              if ! git show "origin/${GITHUB_REF_NAME}:docs/data/automation-status.json" > "${remote_automation_status}" 2>/dev/null; then
-                printf '{}\n' > "${remote_automation_status}"
-              fi
-              if [ "${FRESHNESS_EVENT_NAME}" = "schedule" ]; then
-                precommit_freshness="${RUNNER_TEMP}/precommit-freshness.out"
-                python -m momentum_factor_lab.dashboard_freshness \
-                  --event-name "${FRESHNESS_EVENT_NAME}" \
-                  --data-path "${remote_dashboard}" \
-                  --status-path "${remote_automation_status}" > "${precommit_freshness}" || true
-                cat "${precommit_freshness}"
-                if grep -q '^skip=true$' "${precommit_freshness}"; then
-                  echo "Remote branch already has a dashboard execution after 07:17 KST; skipping duplicate commit."
-                  exit 0
-                fi
-              fi
-              python -m momentum_factor_lab.dashboard_monotonic \
-                --baseline "${remote_dashboard}" \
-                --candidate docs/data/dashboard.json
-            fi
-          }
-          validate_candidate_against_remote
-          git pull --rebase --autostash origin "${GITHUB_REF_NAME}"
-          validate_candidate_against_remote
-          if git diff --quiet -- docs; then
-            echo "No dashboard changes to commit."
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs
-          commit_message="${RUNNER_TEMP}/dashboard-commit-message.txt"
-          cat > "${commit_message}" <<'EOF'
-          Record the validated Momentum refresh outcome
-
-          Constraint: Scheduled and manual GitHub Actions updates only generated docs assets after freshness and monotonic publication gates.
-          Confidence: high
-          Scope-risk: narrow
-          Directive: Do not use this automated commit for source-code or policy changes; those require reviewed human/agent commits.
-          Validated: generated assets passed publication checks; automation-status records whether the data advanced or last-good was preserved.
-          Not-tested: External free data providers may publish the latest close with delay.
-          EOF
-          perl -pi -e 's/^          //' "${commit_message}"
-          git commit -F "${commit_message}"
-          for attempt in 1 2 3; do
-            if git push; then
-              exit 0
-            fi
-            echo "Push attempt ${attempt} failed; rebasing on the latest remote branch before retry."
-            git pull --rebase --autostash origin "${GITHUB_REF_NAME}"
-            validate_candidate_against_remote
-            sleep $((attempt * 10))
-          done
-          echo "Failed to push dashboard updates after retries." >&2
-          exit 1
-
-      - name: Record the current production head for Pages
-        id: pages-request
-        if: steps.freshness.outputs.skip != 'true'
-        env:
-          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-        run: |
-          set -euo pipefail
-          if [[ "${GITHUB_REF_NAME}" != "${DEFAULT_BRANCH}" ]]; then
-            echo "A non-production branch was updated; Pages deployment remains disabled."
-            echo "should_deploy=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          timeout 60s git fetch origin "${DEFAULT_BRANCH}" --depth=1
-          source_sha="$(git rev-parse "origin/${DEFAULT_BRANCH}")"
-          if [[ ! "${source_sha}" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "Unable to resolve the current production SHA." >&2
-            exit 1
-          fi
-          echo "source_sha=${source_sha}" >> "$GITHUB_OUTPUT"
-          echo "should_deploy=true" >> "$GITHUB_OUTPUT"
+            outputs/factor-daily/*/status.json
+            outputs/factor-daily/*/history-revision.json
+            outputs/factor-daily/*/raw/manifest.json
+            outputs/factor-daily/*/market/manifest.json
+            outputs/factor-daily/*/analysis/result.json
+            outputs/factor-candidate/publication.json
 
   request-pages-deployment:
     needs: update-dashboard
-    if: needs.update-dashboard.outputs.should_deploy_pages == 'true'
+    if: needs.update-dashboard.outputs.should_deploy == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 40
     permissions:
-      contents: read
       actions: write
+      contents: read
     steps:
-      - name: Dispatch workflow-owned Pages deployment
+      - name: Dispatch and verify exact-source Pages publication
         env:
           GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ needs.update-dashboard.outputs.source_sha }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-          EXPECTED_SOURCE_SHA: ${{ needs.update-dashboard.outputs.pages_source_sha }}
         run: |
           set -euo pipefail
           dispatched_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          timeout 30s gh workflow run deploy-pages.yml \
-            --repo "${GITHUB_REPOSITORY}" \
-            --ref "${DEFAULT_BRANCH}" \
-            -f expected_source_sha="${EXPECTED_SOURCE_SHA}" \
-            -f request_origin=daily-dashboard
+          timeout 30s gh workflow run deploy-pages.yml --repo "${GITHUB_REPOSITORY}" \
+            --ref "${DEFAULT_BRANCH}" -f expected_source_sha="${SOURCE_SHA}" -f request_origin=daily-dashboard
           deployment_run=""
           for attempt in {1..12}; do
             deployment_run="$(gh run list --repo "${GITHUB_REPOSITORY}" --workflow deploy-pages.yml \
-              --event workflow_dispatch --commit "${EXPECTED_SOURCE_SHA}" --limit 10 \
-              --json databaseId,createdAt --jq ".[] | select(.createdAt >= \"${dispatched_at}\") | .databaseId" | head -n 1)"
+              --event workflow_dispatch --commit "${SOURCE_SHA}" --limit 10 --json databaseId,createdAt \
+              --jq ".[] | select(.createdAt >= \"${dispatched_at}\") | .databaseId" | head -n 1)"
             [[ -n "${deployment_run}" ]] && break
             sleep 5
           done
-          [[ -n "${deployment_run}" ]] || { echo "Pages run was not found." >&2; exit 1; }
+          [[ -n "${deployment_run}" ]] || { echo "Exact-source Pages run not found." >&2; exit 1; }
           timeout 2100s gh run watch "${deployment_run}" --repo "${GITHUB_REPOSITORY}" --interval 10 --exit-status
-
-  public-site-health:
-    needs: [update-dashboard, request-pages-deployment]
-    if: ${{ always() && (github.event_name == 'schedule' || inputs.watchdog_origin == true) }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 8
-    permissions:
-      contents: read
-    steps:
-      - name: Check public page availability separately from refresh success
-        env:
-          PAGE_URL: https://sonchanggi.github.io/momentum-factor-lab/
-        shell: bash
-        run: |
-          set -u
-          required_paths=(index.html publication.json data/integrated-result.json)
-          for attempt in {1..12}; do
-            usable=true
-            for relative_path in "${required_paths[@]}"; do
-              readback="$RUNNER_TEMP/momentum-health-${relative_path//\//-}"
-              if ! curl --fail --silent --show-error --location \
-                --header "Cache-Control: no-cache" \
-                --connect-timeout 10 \
-                --max-time 120 \
-                --output "$readback" \
-                "${PAGE_URL%/}/${relative_path}?health=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${attempt}"; then
-                usable=false
-                break
-              fi
-              if [[ ! -s "$readback" ]]; then
-                usable=false
-                break
-              fi
-              if [[ "$relative_path" == "index.html" ]] && ! grep -Eiq '<!doctype html|<html' "$readback"; then
-                usable=false
-                break
-              fi
-              if [[ "$relative_path" == *.json ]] && ! jq -e 'type == "object" and length > 0' "$readback" >/dev/null; then
-                usable=false
-                break
-              fi
-            done
-            if [[ "$usable" == "true" ]]; then
-              echo "Public page is reachable. Data refresh success is checked separately."
-              exit 0
-            fi
-            [[ $attempt -lt 12 ]] && sleep 10
-          done
-          echo "::error::The public Momentum page or its required JSON is unavailable or invalid."
-          exit 1
 
   refresh-result:
     needs: [update-dashboard, request-pages-deployment]
     if: always()
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
     steps:
-      - name: Require a verified legacy refresh and integrated Pages readback
+      - name: Require successful validated refresh and exact-source deployment
         env:
           UPDATE_RESULT: ${{ needs.update-dashboard.result }}
           REFRESH_SKIPPED: ${{ needs.update-dashboard.outputs.refresh_skipped }}
-          BUILD_OUTCOME: ${{ needs.update-dashboard.outputs.build_outcome }}
-          REFRESH_STATE: ${{ needs.update-dashboard.outputs.refresh_state }}
+          SHOULD_DEPLOY: ${{ needs.update-dashboard.outputs.should_deploy }}
           DEPLOY_RESULT: ${{ needs.request-pages-deployment.result }}
-          SHOULD_DEPLOY: ${{ needs.update-dashboard.outputs.should_deploy_pages }}
         run: |
-          echo "Legacy Momentum data refresh; the integrated page retains its separately reviewed snapshot." >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+          set -euo pipefail
           [[ "${UPDATE_RESULT}" == success ]] || exit 1
-          [[ "${REFRESH_SKIPPED}" == true ]] && exit 0
-          [[ "${BUILD_OUTCOME}" == success && "${REFRESH_STATE}" == available ]] || {
-            echo "::error::No new validated legacy dashboard was published. See the preserved refresh diagnostics."
-            exit 1
-          }
-          if [[ "${SHOULD_DEPLOY}" == true ]]; then
-            [[ "${DEPLOY_RESULT}" == success ]] || exit 1
-          fi
+          [[ "${REFRESH_SKIPPED}" != true ]] || exit 0
+          [[ "${SHOULD_DEPLOY}" == true && "${DEPLOY_RESULT}" == success ]] || exit 1

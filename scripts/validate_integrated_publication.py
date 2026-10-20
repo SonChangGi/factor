@@ -10,6 +10,33 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 
+
+def validate_daily_publication(site, manifest, result):
+    from factor_lab.integrated_validation import validate_automated_result, validate_runtime_lock
+    validation = validate_automated_result(result, manifest['dataAsOf'])
+    assert manifest['status'] == 'passed' and manifest['publicationType'] == 'automated_daily'
+    assert manifest['scheduledIntegratedRefresh'] == 'active'
+    assert manifest['resultIdentity'] == result['resultIdentity']
+    assert all(manifest['validation'].get(k) == v for k, v in validation.items())
+    assert manifest['requestedCount'] == result['data']['requestedCount']
+    package = manifest['calculationPackage']
+    assert package in {'factor_lab', 'momentum_factor_lab'}
+    source = manifest['calculationSourceCommit']
+    assert len(source) == 40 and all(c in '0123456789abcdef' for c in source)
+    lock = subprocess.check_output(['git', 'show', f'{source}:uv.lock'], cwd=ROOT)
+    validate_runtime_lock(result['resultIdentity'], lock)
+    for name, digest in result['resultIdentity']['codeHashFiles'].items():
+        assert not name.startswith('/') and '..' not in Path(name).parts
+        body = subprocess.check_output(['git', 'show', f'{source}:{package}/{name}'], cwd=ROOT)
+        assert hashlib.sha256(body).hexdigest() == digest, name
+    assert not (site / 'data/fixed-factor-history.json').exists(), 'Stale history sidecar in a new embedded-history release'
+    html = (site / 'index.html').read_text()
+    for asset in ('integrated.js', 'integrated_charts.js', 'integrated.css'):
+        path = 'assets/' + asset
+        assert path in manifest['files'] and path in html
+    print(f"PASS daily Factor publication: {result['resultIdentity']['resultId']}, {manifest['dataAsOf']}")
+    return manifest
+
 def validate_fixed_factor_history(sidecar, parent, parent_bytes):
     """Validate the additive presentation artifact without recomputing a portfolio."""
     identity = parent['resultIdentity']
@@ -119,7 +146,11 @@ def validate_history_publication(site, manifest, result):
     sources = {'momentum_factor_lab/integrated_history.py', 'scripts/export_fixed_factor_history.py'}
     assert set(contract['sourceFiles']) == sources, 'History source catalog mismatch'
     for name, digest in contract['sourceFiles'].items():
-        assert hashlib.sha256((ROOT / name).read_bytes()).hexdigest() == digest, f'History source mismatch: {name}'
+        if contract.get('extractionSourceCommit'):
+            body = subprocess.check_output(['git', 'show', f"{contract['extractionSourceCommit']}:{name}"], cwd=ROOT)
+        else:
+            body = (ROOT / name).read_bytes()
+        assert hashlib.sha256(body).hexdigest() == digest, f'History source mismatch: {name}'
     html = (site / 'index.html').read_text()
     asset = 'assets/integrated_charts.js'
     assert asset in manifest['files'] and asset in html, 'Missing shared chart asset'
@@ -130,13 +161,15 @@ def validate_history_publication(site, manifest, result):
 def validate(site=ROOT / 'site'):
     site = Path(site)
     manifest = json.loads((site / 'publication.json').read_text())
-    assert manifest['schemaVersion'] == 'integrated-publication/v1'
+    assert manifest['schemaVersion'] in {'integrated-publication/v1', 'integrated-publication/v2'}
     assert manifest['status'] == 'passed'
     expected = manifest['files']
     observed = {p.relative_to(site).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
                 for p in site.rglob('*') if p.is_file() and p.name != 'publication.json'}
     assert observed == expected, 'Publication contains missing, changed or unreviewed files'
     result = json.loads((site / 'data/integrated-result.json').read_text())
+    if manifest['schemaVersion'] == 'integrated-publication/v2':
+        return validate_daily_publication(site, manifest, result)
     identity = result['resultIdentity']
     assert identity == manifest['resultIdentity'], 'Result identity differs from reviewed release'
     source = manifest['calculationSourceCommit']

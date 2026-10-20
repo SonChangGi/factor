@@ -5,7 +5,7 @@
 ```sh
 # 프로젝트 루트에서 결과 조회와 실험 API를 함께 실행
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 NUMEXPR_NUM_THREADS=1 \
-.venv/bin/python -m momentum_factor_lab.cli serve-integrated \
+.venv/bin/python -m factor_lab.cli serve-integrated \
   --snapshot outputs/integration/market-2026-10-20-repaired-v3 \
   --site outputs/integration/release-2026-10-20/site \
   --runs outputs/integration/api-runs --port 50073
@@ -23,12 +23,12 @@ OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 VECLIB_MAXIMUM_THREAD
 완료한 실행 디렉터리는 덮어쓰지 않는다. 새 출력 경로를 사용한다.
 
 ```sh
-.venv/bin/python -m momentum_factor_lab.cli integrated-run \
+.venv/bin/python -m factor_lab.cli integrated-run \
   --snapshot outputs/integration/market-2026-10-20-repaired-v3 \
   --output outputs/integration/new-run
 
 # 기존 기간 변형을 기본 월별 후보와 분리해 계산
-.venv/bin/python -m momentum_factor_lab.cli integrated-run \
+.venv/bin/python -m factor_lab.cli integrated-run \
   --snapshot outputs/integration/market-2026-10-20-repaired-v3 \
   --experiment-project momentum --experiment-id mom_6_1 \
   --output outputs/integration/new-period-experiment

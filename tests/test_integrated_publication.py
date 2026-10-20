@@ -36,8 +36,9 @@ def test_deployment_and_recovery_read_the_same_integrated_publication():
     assert 'path: public' in deploy and 'find public -type f' in deploy
     assert 'PUBLICATION_ROOT: public' in recovery
     assert 'find "${PUBLICATION_ROOT:-docs}" -type f' in recovery
-    for text in (deploy, recovery, daily):
+    for text in (deploy, recovery):
         assert 'required_paths=(index.html publication.json data/integrated-result.json)' in text
+    assert 'request-pages-deployment:' in daily and 'expected_source_sha="${SOURCE_SHA}"' in daily
     # This publication migration must not modify any existing schedule slots.
     for name in ('daily-dashboard.yml', 'daily-dashboard-watchdog.yml'):
         before = subprocess.check_output(['git', 'show', f'd0a07060a7ca330c50a8cc9edf76d9929f981c3b:.github/workflows/{name}'], cwd=ROOT, text=True)

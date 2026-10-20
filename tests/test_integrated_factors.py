@@ -2,8 +2,8 @@ import json
 from pathlib import Path
 import numpy as np
 import pandas as pd
-from momentum_factor_lab.integrated_data import IntegratedMarket, compute_eligibility
-from momentum_factor_lab.integrated_factors import compute_integrated_factors, factor_registry
+from factor_lab.integrated_data import IntegratedMarket, compute_eligibility
+from factor_lab.integrated_factors import compute_integrated_factors, factor_registry
 
 
 def fixture_market(n=850):
@@ -28,7 +28,7 @@ def test_registry_and_complete_migration_inventory():
     assert sum(r["selectionEligible"] for r in reg) == 26
     rows = json.loads(
         (
-            Path(__file__).parents[1] / "momentum_factor_lab/resources/integrated_legacy_map.json"
+            Path(__file__).parents[1] / "factor_lab/resources/integrated_legacy_map.json"
         ).read_text()
     )["rows"]
     assert sum(r["project"] == "best" for r in rows) == 318

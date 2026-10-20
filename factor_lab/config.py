@@ -132,7 +132,7 @@ class RunConfig:
 
     output_dir: Path = Path("outputs/sample")
     site_dir: Path = Path("docs")
-    cache_dir: Path = Path(".cache/momentum_factor_lab")
+    cache_dir: Path = Path(".cache/factor_lab")
     export_input_snapshot: bool = False
     market_cache_max_age_hours: float = 24.0
     refresh_market_data: bool = False

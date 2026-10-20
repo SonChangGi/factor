@@ -11,9 +11,9 @@ from typing import Any
 
 import numpy as np
 
-from momentum_factor_lab.config import FIXED_WEIGHTING_POLICY, RunConfig
-from momentum_factor_lab.dashboard import _load_payload, write_dashboard_site
-from momentum_factor_lab.workflow import (
+from factor_lab.config import FIXED_WEIGHTING_POLICY, RunConfig
+from factor_lab.dashboard import _load_payload, write_dashboard_site
+from factor_lab.workflow import (
     _absolute_guardrail_profile,
     _analysis_prices,
     _latest_portfolios,

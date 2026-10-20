@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-const js = readFileSync("momentum_factor_lab/web/dashboard.js", "utf8");
-const css = readFileSync("momentum_factor_lab/web/styles.css", "utf8");
+const js = readFileSync("factor_lab/web/dashboard.js", "utf8");
+const css = readFileSync("factor_lab/web/styles.css", "utf8");
 
 assert.match(js, /const CHART_PALETTE_CLASS_MAP = Object\.freeze/);
 assert.match(js, /bars: Object\.freeze\([\s\S]*focal:[\s\S]*best:/);

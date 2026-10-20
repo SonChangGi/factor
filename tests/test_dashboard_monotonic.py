@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from momentum_factor_lab.dashboard_monotonic import (
+from factor_lab.dashboard_monotonic import (
     decide_monotonic_dashboard,
     load_dashboard_snapshot,
     main,

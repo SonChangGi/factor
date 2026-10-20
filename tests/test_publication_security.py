@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from momentum_factor_lab.live_data import _sanitize_public_source_health
-from momentum_factor_lab.publication_security import (
+from factor_lab.live_data import _sanitize_public_source_health
+from factor_lab.publication_security import (
     PUBLIC_CACHE_REFERENCE,
     REDACTED_TEXT,
     main,

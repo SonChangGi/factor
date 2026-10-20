@@ -6,16 +6,16 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from momentum_factor_lab import workflow as workflow_module
-from momentum_factor_lab.advanced_factors import ADVANCED_FACTOR_NAMES, AdvancedFactorResult
-from momentum_factor_lab.config import (
+from factor_lab import workflow as workflow_module
+from factor_lab.advanced_factors import ADVANCED_FACTOR_NAMES, AdvancedFactorResult
+from factor_lab.config import (
     FIXED_WEIGHTING_POLICY,
     POLICY_REGISTRY,
     RunConfig,
     WEIGHTING_POLICIES,
 )
-from momentum_factor_lab.portfolio import construct_target_allocation
-from momentum_factor_lab.workflow import (
+from factor_lab.portfolio import construct_target_allocation
+from factor_lab.workflow import (
     NoEligibleFactorError,
     AnalysisResult,
     _apply_factor_guardrails,

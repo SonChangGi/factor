@@ -14,12 +14,28 @@ import threading
 import uuid
 
 
+def runtime_identity():
+    import importlib.metadata
+    import platform
+    root = Path(__file__).resolve().parents[1]
+    packages = {}
+    for name in ('numpy', 'pandas', 'exchange-calendars', 'rfc8785', 'yfinance', 'finance-datareader'):
+        try:
+            packages[name] = importlib.metadata.version(name)
+        except importlib.metadata.PackageNotFoundError:
+            packages[name] = None
+    return dict(pythonVersion=platform.python_version(), packageVersions=packages,
+                dependencyLockHash=hashlib.sha256((root / 'uv.lock').read_bytes()).hexdigest())
+
+
 def code_fingerprint():
     source = Path(__file__).parent
     names = ('integrated_data.py', 'integrated_factors.py', 'integrated_engine.py',
              'integrated_research.py', 'integrated_service.py', 'backtest.py',
              'portfolio.py', 'metrics.py', 'config.py', 'integrated_variants.py',
-             'integrated_legacy_best.py', 'integrated_repairs.py', 'integrated_history.py', 'factors.py',
+             'integrated_legacy_best.py', 'integrated_repairs.py', 'integrated_history.py',
+             'integrated_automation.py', 'integrated_validation.py',
+             'resources/integrated_market_policy.json', 'factors.py',
              'advanced_factors.py', 'universe.py', 'resources/integrated_legacy_map.json',
              'resources/integrated_universe.json')
     records = {name: hashlib.sha256((source / name).read_bytes()).hexdigest()
@@ -183,7 +199,15 @@ def execute_run(market, settings, directory, comparison_factors=None, common_uni
         raise RuntimeError('Calculation code changed during execution; result was not published')
     result['resultIdentity']['codeHash'] = code_hash
     result['resultIdentity']['codeHashFiles'] = code_files
+    result['resultIdentity']['runtime'] = runtime_identity()
     result['resultIdentity']['resultId'] = hashlib.sha256(json.dumps(result['resultIdentity'], sort_keys=True).encode()).hexdigest()[:24]
+    for stress in result.get('research', {}).get('stress', []):
+        stress.update(inputHash=result['resultIdentity']['inputHash'], codeHash=code_hash,
+                      sourceResultId=result['resultIdentity']['resultId'],
+                      sourceEngineVersion=result['resultIdentity']['engineVersion'])
+        policy = market.metadata.get('automationPolicy')
+        if policy:
+            stress['sourcePolicyHash'] = policy['sha256']
     validate_result(result)
     atomic_json(Path(directory) / 'result.json', result)
     return result

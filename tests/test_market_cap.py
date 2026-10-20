@@ -3,8 +3,8 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from momentum_factor_lab.config import RunConfig
-from momentum_factor_lab.market_cap import build_market_cap_panel
+from factor_lab.config import RunConfig
+from factor_lab.market_cap import build_market_cap_panel
 
 
 def _fact(

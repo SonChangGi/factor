@@ -5,8 +5,8 @@ import vm from 'node:vm';
 
 const payloadPath = process.env.MFL_TEST_PAYLOAD || 'docs/data/grid/v1/latest.json';
 const payload = JSON.parse(readFileSync(payloadPath, 'utf8'));
-const source = readFileSync('momentum_factor_lab/web/dashboard.js', 'utf8');
-const html = readFileSync('momentum_factor_lab/web/index.html', 'utf8');
+const source = readFileSync('factor_lab/web/dashboard.js', 'utf8');
+const html = readFileSync('factor_lab/web/index.html', 'utf8');
 const workflow = readFileSync('.github/workflows/controlled-analysis.yml', 'utf8');
 const context = vm.createContext({
   console,
@@ -211,7 +211,7 @@ const published = {
   },
   artifact: {
     url: (
-      'https://sonchanggi.github.io/momentum-factor-lab/data/control-runs/v1/'
+      'https://sonchanggi.github.io/factor/data/control-runs/v1/'
       + `momentum-run-0001/${payload.resultKey}.json`
     ),
     sha256: artifactSha,
@@ -334,7 +334,7 @@ assert.match(workflow, /control_input_schema_version:/);
 assert.match(workflow, /control_input_schema_hash:/);
 assert.match(workflow, /control_config_hash_algorithm:/);
 assert.match(workflow, /control_config_hash:/);
-assert.match(workflow, /python -m momentum_factor_lab\.control_run/);
+assert.match(workflow, /python -m factor_lab\.control_run/);
 assert.match(workflow, /--allow-fallback "\$\{ALLOW_FALLBACK\}"/);
 assert.match(workflow, /result-manifest/);
 assert.match(workflow, /QUANT_CONTROL_WORKER_CALLBACK_TOKEN/);

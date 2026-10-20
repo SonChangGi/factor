@@ -1,4 +1,4 @@
-name: Daily Momentum Dashboard Watchdog
+name: Daily Factor Dashboard Watchdog
 
 on:
   workflow_dispatch:
@@ -9,12 +9,19 @@ on:
     - cron: "17 5 * * 2-6"
 
 concurrency:
-  group: daily-momentum-dashboard-watchdog-${{ github.ref }}
+  group: daily-factor-dashboard-watchdog-${{ github.ref }}
   cancel-in-progress: false
 
 permissions:
   contents: read
   actions: write
+
+env:
+  OPENBLAS_NUM_THREADS: 1
+  OMP_NUM_THREADS: 1
+  MKL_NUM_THREADS: 1
+  VECLIB_MAXIMUM_THREADS: 1
+  NUMEXPR_NUM_THREADS: 1
 
 jobs:
   dispatch-if-stale:
@@ -39,18 +46,20 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
 
-      - name: Install trading-session calendar
-        run: python -m pip install -e .
+      - name: Install integrated trading-session freshness checker
+        run: |
+          python -m pip install uv==0.11.17
+          uv sync --frozen --python "$(command -v python)"
+          echo "${GITHUB_WORKSPACE}/.venv/bin" >> "$GITHUB_PATH"
 
       - name: Decide whether dashboard is stale
         id: freshness
         env:
           DASHBOARD_FRESHNESS_EVENT_NAME: schedule
         run: |
-          python -m momentum_factor_lab.dashboard_freshness \
+          python -m factor_lab.integrated_automation freshness \
             --event-name "${DASHBOARD_FRESHNESS_EVENT_NAME}" \
-            --data-path docs/data/dashboard.json \
-            --status-path docs/data/automation-status.json >> "$GITHUB_OUTPUT"
+            --site site >> "$GITHUB_OUTPUT"
 
       - name: Dispatch daily dashboard workflow
         if: steps.freshness.outputs.skip != 'true'
@@ -67,8 +76,8 @@ jobs:
             exit 0
           fi
           echo "Dashboard is stale: ${{ steps.freshness.outputs.reason }}"
-          echo "Latest run KST: ${{ steps.freshness.outputs.latest_run_kst }}"
-          echo "Cutoff KST: ${{ steps.freshness.outputs.cutoff_kst }}"
+          echo "Latest data: ${{ steps.freshness.outputs.latest_data_as_of }}"
+          echo "Target session: ${{ steps.freshness.outputs.target_data_as_of }}"
           gh workflow run daily-dashboard.yml \
             --repo "${GITHUB_REPOSITORY}" \
             --ref "${DEFAULT_BRANCH:-main}" \
@@ -79,7 +88,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-          PAGE_URL: https://sonchanggi.github.io/momentum-factor-lab/
+          PAGE_URL: https://sonchanggi.github.io/factor/
           PUBLICATION_ROOT: public
         shell: bash
         run: |
@@ -162,7 +171,7 @@ jobs:
     steps:
       - name: Check public page availability separately from dispatch success
         env:
-          PAGE_URL: https://sonchanggi.github.io/momentum-factor-lab/
+          PAGE_URL: https://sonchanggi.github.io/factor/
         shell: bash
         run: |
           set -u

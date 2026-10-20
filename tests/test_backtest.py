@@ -2,11 +2,11 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from momentum_factor_lab.backtest import _rebalance_dates, run_factor_backtest
-from momentum_factor_lab.config import FIXED_WEIGHTING_POLICY, RunConfig, WEIGHTING_POLICIES
-from momentum_factor_lab.data import build_eligibility_mask
-from momentum_factor_lab.metrics import composite_factor_scorecard, evaluation_metrics
-from momentum_factor_lab.portfolio import construct_model_portfolio
+from factor_lab.backtest import _rebalance_dates, run_factor_backtest
+from factor_lab.config import FIXED_WEIGHTING_POLICY, RunConfig, WEIGHTING_POLICIES
+from factor_lab.data import build_eligibility_mask
+from factor_lab.metrics import composite_factor_scorecard, evaluation_metrics
+from factor_lab.portfolio import construct_model_portfolio
 
 
 def _fixture() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, RunConfig]:

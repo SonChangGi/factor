@@ -3,10 +3,10 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
 
-const html = readFileSync("momentum_factor_lab/web/index.html", "utf8");
-const css = readFileSync("momentum_factor_lab/web/styles.css", "utf8");
-const sharedNav = readFileSync("momentum_factor_lab/web/shared-nav.css", "utf8");
-const source = readFileSync("momentum_factor_lab/web/dashboard.js", "utf8");
+const html = readFileSync("factor_lab/web/index.html", "utf8");
+const css = readFileSync("factor_lab/web/styles.css", "utf8");
+const sharedNav = readFileSync("factor_lab/web/shared-nav.css", "utf8");
+const source = readFileSync("factor_lab/web/dashboard.js", "utf8");
 const publishedHtml = readFileSync("docs/index.html", "utf8");
 assert.equal(readFileSync("docs/assets/styles.css", "utf8"), css);
 assert.equal(readFileSync("docs/assets/dashboard.js", "utf8"), source);
@@ -33,9 +33,8 @@ assert.deepEqual(
 const expectedNavigation = [
   ["Quant Research Hub", "https://sonchanggi.github.io/quant-dashboard/"],
   ["Fear &amp; Greed", "https://sonchanggi.github.io/fearNgreed/"],
-  ["Momentum", "https://sonchanggi.github.io/momentum-factor-lab/"],
+  ["Factor", "https://sonchanggi.github.io/factor/"],
   ["DRAM", "https://sonchanggi.github.io/dram-price/"],
-  ["Best Factor", "https://sonchanggi.github.io/best-factor/"],
   ["ETF", "https://sonchanggi.github.io/etf-tracking/"],
   ["SOX", "https://sonchanggi.github.io/sox/"],
   ["Regime", "https://sonchanggi.github.io/regime/"],
@@ -52,7 +51,7 @@ for (const [label, href] of expectedNavigation) {
 const navigation = html.match(/<nav class="site-nav quant-shared-nav"[\s\S]*?<\/nav>/)?.[0] || "";
 assert.match(html, /<body id="top" class="has-quant-shared-nav">/);
 assert.match(html, /assets\/shared-nav\.css\?v=__SHARED_NAV_VERSION__/);
-assert.equal((navigation.match(/href="https:\/\/sonchanggi\.github\.io\//g) || []).length, 10);
+assert.equal((navigation.match(/href="https:\/\/sonchanggi\.github\.io\//g) || []).length, 9);
 assert.equal((navigation.match(/aria-current="page"/g) || []).length, 1);
 assert.match(navigation, /quant-shared-nav__brand[^>]*href="https:\/\/sonchanggi\.github\.io\/quant-dashboard\/"/);
 assert.doesNotMatch(navigation, />Hub<\/a>/);

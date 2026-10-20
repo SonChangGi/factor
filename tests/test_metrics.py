@@ -3,7 +3,7 @@ import math
 import pandas as pd
 import pytest
 
-from momentum_factor_lab.metrics import (
+from factor_lab.metrics import (
     cagr,
     calmar_ratio,
     composite_factor_scorecard,

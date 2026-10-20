@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-const html = readFileSync("momentum_factor_lab/web/index.html", "utf8");
-const css = readFileSync("momentum_factor_lab/web/styles.css", "utf8");
-const js = readFileSync("momentum_factor_lab/web/dashboard.js", "utf8");
+const html = readFileSync("factor_lab/web/index.html", "utf8");
+const css = readFileSync("factor_lab/web/styles.css", "utf8");
+const js = readFileSync("factor_lab/web/dashboard.js", "utf8");
 const ids = new Set([...html.matchAll(/\bid="([^"]+)"/g)].map((match) => match[1]));
 
 for (const id of [

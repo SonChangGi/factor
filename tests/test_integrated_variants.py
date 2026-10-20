@@ -1,9 +1,9 @@
 import numpy as np
 import pandas as pd
 import pytest
-from momentum_factor_lab.integrated_data import IntegratedMarket
-from momentum_factor_lab.integrated_engine import IntegratedConfig, completed_monthends
-from momentum_factor_lab.integrated_variants import (
+from factor_lab.integrated_data import IntegratedMarket
+from factor_lab.integrated_engine import IntegratedConfig, completed_monthends
+from factor_lab.integrated_variants import (
     variant_scores,
     resolve_experiment,
     run_legacy_experiment,
@@ -62,7 +62,7 @@ def test_variant_fixed_accounting_next_close_and_pool_exclusion():
 
 
 def test_invalid_fundamental_and_unknown_definitions_rejected():
-    from momentum_factor_lab.integrated_variants import experiment_catalog
+    from factor_lab.integrated_variants import experiment_catalog
 
     blocked = [
         row

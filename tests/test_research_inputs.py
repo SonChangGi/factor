@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from momentum_factor_lab.config import MAX_TOP_N, RunConfig
-from momentum_factor_lab.research_inputs import (
+from factor_lab.config import MAX_TOP_N, RunConfig
+from factor_lab.research_inputs import (
     RESEARCH_INPUTS_VERSION,
     ResearchInputError,
     ResearchInputs,

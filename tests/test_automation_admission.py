@@ -72,4 +72,12 @@ def test_failed_job_rerun_rechecks_admission_before_collection():
     collection = workflow.split('  update-dashboard:\n', 1)[1].split('  request-pages-deployment:', 1)[0]
     assert "if: github.run_attempt != '1'" in collection
     assert 'actions: read' in collection
-    assert collection.index('--max-wait-seconds 300') < collection.index('Build daily Korean dashboard')
+    assert collection.index('--max-wait-seconds 300') < collection.index('Collect, reconcile, calculate and validate the candidate')
+
+
+def test_only_active_factor_sox_etf_peers_are_coordinated():
+    assert gate.WORKFLOWS == {
+        "SonChangGi/sox": "deploy-pages.yml",
+        "SonChangGi/factor": "daily-dashboard.yml",
+        "SonChangGi/etf-tracking": "update-data.yml",
+    }

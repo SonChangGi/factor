@@ -18,7 +18,7 @@ DEFAULT_UNIVERSE_PATH = RESOURCE_DIR / "default_universe.csv"
 SEC_COMPANY_TICKERS_EXCHANGE_URL = "https://www.sec.gov/files/company_tickers_exchange.json"
 NASDAQ_LISTED_URL = "https://www.nasdaqtrader.com/dynamic/SymDir/nasdaqlisted.txt"
 NASDAQ_OTHER_LISTED_URL = "https://www.nasdaqtrader.com/dynamic/SymDir/otherlisted.txt"
-USER_AGENT = "momentum-factor-lab/0.1 free-public-data research"
+USER_AGENT = "factor/0.1 free-public-data research"
 SEC_USER_AGENT_ENV = "MOMENTUM_FACTOR_LAB_SEC_USER_AGENT"
 PUBLIC_UNIVERSE_CACHE_TTL_DAYS = 1
 

@@ -3,9 +3,9 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "momentum-factor-lab"
+name = "factor"
 version = "0.1.0"
-description = "Actual-market momentum factor and portfolio-weighting research lab."
+description = "Price-volume factor research and monthly portfolio selection."
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
@@ -20,10 +20,10 @@ live = ["yfinance>=0.2.40", "finance-datareader>=0.9.202"]
 dev = ["pytest>=8.0", "ruff>=0.4"]
 
 [project.scripts]
-momentum-factor-lab = "momentum_factor_lab.cli:main"
+factor = "factor_lab.cli:main"
 
 [tool.setuptools.packages.find]
-include = ["momentum_factor_lab*"]
+include = ["factor_lab*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -31,10 +31,10 @@ pythonpath = ["."]
 
 [tool.ruff]
 line-length = 100
-src = ["momentum_factor_lab", "tests"]
+src = ["factor_lab", "tests"]
 
 [tool.setuptools.package-data]
-momentum_factor_lab = [
+factor_lab = [
   "resources/*.csv",
   "resources/integrated_*.json",
   "web/*.html",

@@ -2,8 +2,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from momentum_factor_lab.config import FIXED_WEIGHTING_POLICY, RunConfig, WEIGHTING_POLICIES
-from momentum_factor_lab.portfolio import (
+from factor_lab.config import FIXED_WEIGHTING_POLICY, RunConfig, WEIGHTING_POLICIES
+from factor_lab.portfolio import (
     TIE_BREAK_POLICY,
     balanced_weights,
     construct_model_portfolio,

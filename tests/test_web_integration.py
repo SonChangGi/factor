@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 @pytest.fixture(scope="session")
 def web_payload_path(demo_result, tmp_path_factory: pytest.TempPathFactory) -> Path:
-    from momentum_factor_lab.workflow import result_payload
+    from factor_lab.workflow import result_payload
 
     path = tmp_path_factory.mktemp("web-contract") / "schema-v5.json"
     path.write_text(json.dumps(result_payload(demo_result)), encoding="utf-8")

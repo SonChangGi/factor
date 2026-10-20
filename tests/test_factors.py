@@ -4,9 +4,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from momentum_factor_lab import advanced_factors
+from factor_lab import advanced_factors
 
-from momentum_factor_lab.factors import (
+from factor_lab.factors import (
     FACTOR_DEFINITIONS,
     FACTOR_SPECS,
     acceleration_1m_vs_3m,

@@ -2286,6 +2286,9 @@ main { padding: 14px 0 40px; }
 .result-cards .card strong {
   font-size: clamp(1.05rem, 1.6vw, 1.3rem);
 }
+#recommendation-status[data-tone="error"] { color: var(--danger); }
+#recommendation-status[data-tone="pending"] { color: var(--muted); }
+#run-status .status-line-automation-detail { grid-column: 1 / -1; align-items: start; }
 
 .panel {
   margin-bottom: 14px;

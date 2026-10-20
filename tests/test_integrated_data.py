@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 import pytest
-from momentum_factor_lab.integrated_data import (
+from factor_lab.integrated_data import (
     IntegratedMarket,
     compute_eligibility,
     integrated_universe,
@@ -46,7 +46,7 @@ def test_snapshot_round_trip_and_tamper_failure(tmp_path):
 
 def test_partial_batch_retries_symbol_and_retains_field_pairing(tmp_path, monkeypatch):
     import yfinance as yf
-    from momentum_factor_lab.integrated_data import collect_integrated_market
+    from factor_lab.integrated_data import collect_integrated_market
 
     calls = []
 
@@ -79,7 +79,7 @@ def test_partial_batch_retries_symbol_and_retains_field_pairing(tmp_path, monkey
 
 def test_collector_does_not_admit_unverified_zero_volume_valuations(tmp_path, monkeypatch):
     import yfinance as yf
-    from momentum_factor_lab.integrated_data import collect_integrated_market
+    from factor_lab.integrated_data import collect_integrated_market
 
     def download(symbols, **kwargs):
         ix = pd.bdate_range("2025-01-01", periods=4)
@@ -106,10 +106,10 @@ def test_collector_does_not_admit_unverified_zero_volume_valuations(tmp_path, mo
 
 def test_original_accounting_matches_explicit_targets_on_same_snapshot():
     """Protect the new external-target boundary with legacy allocation/accounting."""
-    from momentum_factor_lab.backtest import run_factor_backtest, _rebalance_dates
-    from momentum_factor_lab.config import RunConfig, FIXED_WEIGHTING_POLICY
-    from momentum_factor_lab.portfolio import construct_target_allocation
-    from momentum_factor_lab.factors import compute_factor_scores
+    from factor_lab.backtest import run_factor_backtest, _rebalance_dates
+    from factor_lab.config import RunConfig, FIXED_WEIGHTING_POLICY
+    from factor_lab.portfolio import construct_target_allocation
+    from factor_lab.factors import compute_factor_scores
 
     ix = pd.bdate_range("2020-01-01", periods=370)
     t = np.arange(len(ix))[:, None]
@@ -171,7 +171,7 @@ def test_original_accounting_matches_explicit_targets_on_same_snapshot():
 
 
 def test_as_traded_reconstruction_excludes_split_day_and_preserves_dollars(tmp_path):
-    from momentum_factor_lab.integrated_data import reconstruct_as_traded
+    from factor_lab.integrated_data import reconstruct_as_traded
 
     ix = pd.bdate_range("2020-01-01", periods=260)
     # Economic price is $8 before, $2 after the 4:1 event; all provider
@@ -195,7 +195,7 @@ def test_as_traded_reconstruction_excludes_split_day_and_preserves_dollars(tmp_p
 
 
 def test_future_split_and_rescaled_provider_history_preserve_past_price_floor():
-    from momentum_factor_lab.integrated_data import reconstruct_as_traded
+    from factor_lab.integrated_data import reconstruct_as_traded
 
     ix = pd.bdate_range("2020-01-01", periods=270)
     p = pd.DataFrame(8.0, index=ix, columns=["A"])
@@ -231,7 +231,7 @@ def test_future_split_and_rescaled_provider_history_preserve_past_price_floor():
 
 def test_historical_collection_uses_future_actions_before_clipping(tmp_path, monkeypatch):
     import yfinance as yf
-    from momentum_factor_lab.integrated_data import collect_integrated_market
+    from factor_lab.integrated_data import collect_integrated_market
 
     seen = []
 
@@ -267,7 +267,7 @@ def test_historical_collection_uses_future_actions_before_clipping(tmp_path, mon
 
 
 def test_quality_quarantines_shape_inputs_preserving_close_and_sources(tmp_path):
-    from momentum_factor_lab.integrated_data import apply_market_quality
+    from factor_lab.integrated_data import apply_market_quality
 
     ix = pd.bdate_range("2020-01-01", periods=3)
     close = pd.DataFrame({"A": [10.0, 11.0, 12.0], "EMPTY": [np.nan] * 3}, index=ix)

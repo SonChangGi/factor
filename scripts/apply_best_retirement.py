@@ -12,7 +12,7 @@ import sys
 from urllib.parse import urlparse
 from verify_best_retirement import check
 
-MESSAGE = "Best Factor는 Momentum으로 통합되었습니다. momentum-factor-lab integrated-run을 사용하세요. 기존 Best 입력은 자동 변환하지 않습니다."
+MESSAGE = "Best Factor는 Factor로 통합되었습니다. factor integrated-run을 사용하세요. 기존 Best 입력은 자동 변환하지 않습니다."
 MARKER = "# Local retirement: integrated Momentum replaces this execution path."
 BEST = Path("/Users/changgison/projects/best-factor")
 COPY = Path(

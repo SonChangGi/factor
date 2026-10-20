@@ -6,9 +6,9 @@ from types import SimpleNamespace
 import pandas as pd
 import pytest
 
-from momentum_factor_lab.config import WEIGHTING_POLICIES
-from momentum_factor_lab.identity import canonical_json_bytes
-from momentum_factor_lab.workflow import (
+from factor_lab.config import WEIGHTING_POLICIES
+from factor_lab.identity import canonical_json_bytes
+from factor_lab.workflow import (
     FACTOR_DIAGNOSTICS_CONTRACT_VERSION,
     FACTOR_DIAGNOSTICS_RANK_IC_HORIZON_SESSIONS,
     FACTOR_DIAGNOSTICS_REDUNDANCY_THRESHOLD,
@@ -311,7 +311,7 @@ def test_factor_holding_history_sidecar_builder_fails_closed_above_public_limit(
 ) -> None:
     oversized = b"x" * (MAX_FACTOR_HOLDING_HISTORY_SIDECAR_BYTES + 1)
     monkeypatch.setattr(
-        "momentum_factor_lab.workflow.canonical_json_bytes",
+        "factor_lab.workflow.canonical_json_bytes",
         lambda _value: oversized,
     )
 

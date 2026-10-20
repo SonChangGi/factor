@@ -9,18 +9,18 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from momentum_factor_lab import data
-from momentum_factor_lab.backtest import run_factor_backtest
-from momentum_factor_lab.config import FIXED_WEIGHTING_POLICY, RunConfig
-from momentum_factor_lab.data import (
+from factor_lab import data
+from factor_lab.backtest import run_factor_backtest
+from factor_lab.config import FIXED_WEIGHTING_POLICY, RunConfig
+from factor_lab.data import (
     build_eligibility_mask,
     load_market_data,
     read_market_data_snapshot,
     write_market_data_snapshot,
 )
-from momentum_factor_lab.identity import build_result_identity
-from momentum_factor_lab.metrics import metric_summary
-from momentum_factor_lab.market_cap import MarketCapResult
+from factor_lab.identity import build_result_identity
+from factor_lab.metrics import metric_summary
+from factor_lab.market_cap import MarketCapResult
 
 
 @pytest.fixture(autouse=True)
@@ -74,7 +74,7 @@ def _stub_sec_market_caps(monkeypatch: pytest.MonkeyPatch) -> None:
         )
 
     monkeypatch.setattr(
-        "momentum_factor_lab.market_cap.load_sec_market_caps",
+        "factor_lab.market_cap.load_sec_market_caps",
         load_fixture_market_caps,
     )
 
@@ -442,7 +442,7 @@ def test_live_provider_non_positive_prices_are_missing_and_disclosed(monkeypatch
         provider="public-test-provider",
     )
     monkeypatch.setattr(
-        "momentum_factor_lab.live_data.download_live_data",
+        "factor_lab.live_data.download_live_data",
         lambda _config: acquired,
     )
 
@@ -490,7 +490,7 @@ def test_zero_volume_candidate_quote_blocks_halt_exit_and_terminal_metrics(
         provider="public-test-provider",
     )
     monkeypatch.setattr(
-        "momentum_factor_lab.live_data.download_live_data",
+        "factor_lab.live_data.download_live_data",
         lambda _config: acquired,
     )
     config = RunConfig(
@@ -600,7 +600,7 @@ def test_live_comparator_prices_are_preserved_outside_the_analyzed_universe(monk
         provider="public-test-provider",
     )
     monkeypatch.setattr(
-        "momentum_factor_lab.live_data.download_live_data",
+        "factor_lab.live_data.download_live_data",
         lambda _config: acquired,
     )
 
@@ -1149,7 +1149,7 @@ def test_live_raw_close_proxy_snapshot_is_auditable_and_hash_reproducible(
         provider="public-test-provider",
     )
     monkeypatch.setattr(
-        "momentum_factor_lab.live_data.download_live_data",
+        "factor_lab.live_data.download_live_data",
         lambda _config: acquired,
     )
     market = load_market_data(
@@ -1187,7 +1187,7 @@ def test_live_raw_close_proxy_snapshot_is_auditable_and_hash_reproducible(
 def test_dead_offline_sample_path_is_absent() -> None:
     assert "offline_sample" not in inspect.getsource(RunConfig)
     assert "generate_offline_sample_data" not in inspect.getsource(
-        __import__("momentum_factor_lab.live_data", fromlist=["*"])
+        __import__("factor_lab.live_data", fromlist=["*"])
     )
 
 
