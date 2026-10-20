@@ -204,13 +204,20 @@ def factor_registry():
             selectionEligible=d != "research",
             formula=formula,
             minHistory=h,
-            version="1.1.0" if i == "CONSISTENCY12_1" else "1.0.0",
+            version="1.1.0" if i in ("CONSISTENCY12_1", "SIGNED_VP63", "MAX1M") else "1.0.0",
             **(
                 {
                     "signInputContract": "provider-close-cash-source-interval-v1",
                     "signInputNotes": "동일 분할 기준 종가·배당으로 상승일을 계산한다. 원자료 정밀도 구간이 0을 포함하면 보합, 정밀도 미확인은 결측으로 처리한다.",
                 }
-                if i == "CONSISTENCY12_1" else {}
+                if i in ("CONSISTENCY12_1", "SIGNED_VP63") else {}
+            ),
+            **(
+                {
+                    "returnInputContract": "provider-close-cash-holding-return-v1",
+                    "returnInputNotes": "동일 분할 기준 종가와 배당으로 (당일 종가−전일 종가+배당)/전일 종가를 계산한다.",
+                }
+                if i == "MAX1M" else {}
             ),
             unit={
                 "AMIHUD252": "return_per_USD",
@@ -332,6 +339,54 @@ def consistency_return_signs(market):
              & np.isfinite(cash) & (cash >= 0))
     signs = np.where(net_lower > 0, 1.0, np.where(net_upper < 0, -1.0, 0.0))
     return pd.DataFrame(np.where(valid, signs, np.nan), index=close.index, columns=close.columns)
+
+
+def source_holding_returns(market):
+    """Cash-inclusive holding returns on one split basis; no Adj Close fallback."""
+    close = market.provider_close
+    if close is None:
+        source = market.metadata.get(
+            "holdingReturnSource", market.metadata.get("consistencySignSource", {})
+        )
+        if source.get("basis") != "split_adjusted_raw_close":
+            return pd.DataFrame(np.nan, index=market.prices.index, columns=market.prices.columns)
+        close = market.raw_close
+    else:
+        # Canonical source centers eliminate CSV binary64 serialization tails,
+        # without rounding financial returns or changing declared exact inputs.
+        scale = np.ones(close.shape)
+        amendments = market.metadata.get("amendments", [])
+        for row in amendments:
+            if row.get("kind") != "verified_missing_split_normalization":
+                continue
+            symbol, date, ratio = row["symbol"], pd.Timestamp(row["date"]), row["ratio"]
+            if not np.isfinite(ratio) or ratio <= 0:
+                raise ValueError("Invalid recorded split normalization")
+            if symbol in close:
+                scale[close.index < date, close.columns.get_loc(symbol)] /= ratio
+        centers = (close.to_numpy() / scale).astype(np.float32).astype(float) * scale
+        for row in amendments:
+            if row.get("kind") != "observed_quote":
+                continue
+            symbol, date = row["symbol"], pd.Timestamp(row["date"])
+            if symbol not in close or date not in close.index:
+                continue
+            position = (close.index.get_loc(date), close.columns.get_loc(symbol))
+            precision = row.get("closePrecision")
+            if precision is None:
+                centers[position] = np.nan
+            else:
+                value = close.iloc[position]
+                _quote_interval(value, precision)  # Validate the separate source contract.
+                centers[position] = (float(np.float32(value))
+                                     if precision["kind"] == "float32" else value)
+        close = pd.DataFrame(centers, index=close.index, columns=close.columns)
+    previous = close.shift(1)
+    cash = market.dividends
+    valid = (np.isfinite(close) & close.gt(0) & np.isfinite(previous) & previous.gt(0)
+             & np.isfinite(cash) & cash.ge(0))
+    returns = (close - previous + cash).div(previous.where(previous.gt(0)))
+    return returns.where(valid & np.isfinite(returns))
 
 
 def _expected_shortfall(frame, window=252, tail_count=26):
@@ -467,7 +522,8 @@ def iter_integrated_factors(market):
         elif id == "DOWNSIDEDEV252":
             s = np.sqrt(r.clip(upper=0).pow(2).rolling(252).mean() * 252)
         elif id == "MAX1M":
-            grouped = r.groupby(r.index.to_period("M"))
+            holding_returns = source_holding_returns(market)
+            grouped = holding_returns.groupby(holding_returns.index.to_period("M"))
             complete = grouped.count().eq(grouped.size(), axis=0)
             s = expand(grouped.max().where(complete))
         elif id == "ES10_252":
@@ -501,7 +557,10 @@ def iter_integrated_factors(market):
                 dv.shift(21).rolling(105).std(),
             )
         elif id == "SIGNED_VP63":
-            s = _div((np.sign(r) * dv).rolling(63).sum(), dv.rolling(63).sum())
+            s = _div(
+                (consistency_return_signs(market) * dv).rolling(63).sum(),
+                dv.rolling(63).sum(),
+            )
         elif id == "PV_CORR126":
             s = r.rolling(126).corr(np.log(dv).diff())
         s = s.replace([np.inf, -np.inf], np.nan).where(market.eligibility)

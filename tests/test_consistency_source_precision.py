@@ -81,7 +81,7 @@ def test_external_quote_has_its_own_precision_and_future_does_not_change_past():
     assert definition['signInputContract'] == 'provider-close-cash-source-interval-v1'
 
 
-def test_only_consistency_uses_new_cash_sign_input_and_keeps_formation_denominator():
+def test_source_cash_consumers_leave_other_factors_unchanged_and_keep_denominator():
     from factor_lab.integrated_factors import compute_integrated_factors
 
     m = market([100.] * 850)
@@ -96,7 +96,7 @@ def test_only_consistency_uses_new_cash_sign_input_and_keeps_formation_denominat
     m.dividends.loc[changed_day, 'A'] = .01
     changed = compute_integrated_factors(m)
     for key in baseline:
-        if key != 'CONSISTENCY12_1':
+        if key not in ('CONSISTENCY12_1', 'SIGNED_VP63', 'MAX1M'):
             pd.testing.assert_frame_equal(changed[key], baseline[key])
     pd.testing.assert_frame_equal(m.prices, original_prices)
     ends = m.prices.groupby(m.prices.index.to_period('M')).tail(1).index

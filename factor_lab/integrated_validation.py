@@ -297,7 +297,7 @@ def write_automated_manifest(candidate, result, source_commit, validation, *, pu
     require(validation.get('status') == 'passed', 'Candidate validation did not pass')
     require(publication_type in {'automated_daily', 'reviewed_definition_migration'}, 'Unknown publication type')
     if publication_type == 'reviewed_definition_migration':
-        require(validation.get('definitionReview', {}).get('reviewedDefinitionIds') == ['CONSISTENCY12_1'],
+        require(validation.get('definitionReview', {}).get('reviewedDefinitionIds') == ['CONSISTENCY12_1', 'MAX1M', 'SIGNED_VP63'],
                 'Reviewed migration requires an explicit definition review')
     root = Path(__file__).resolve().parents[1]
     package = Path(__file__).parent.name

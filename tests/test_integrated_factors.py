@@ -19,7 +19,10 @@ def fixture_market(n=850):
     v = p * 0 + 1e6
     e = p.notna()
     e["SPY"] = False
-    return IntegratedMarket(p, p, p * 0.999, p * 1.01, p * 0.99, v, p * 0, p * 0, e, {})
+    return IntegratedMarket(p, p, p * 0.999, p * 1.01, p * 0.99, v, p * 0, p * 0, e,
+                            {"consistencySignSource": {
+                                "basis": "split_adjusted_raw_close",
+                                "precision": {"kind": "exact"}}})
 
 
 def test_registry_and_complete_migration_inventory():

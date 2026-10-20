@@ -27,9 +27,12 @@ def validate_daily_publication(site, manifest, result):
         assert review['candidateResultId'] == contract['candidateResultId'] == result['resultIdentity']['resultId']
         assert review['candidateInputHash'] == result['resultIdentity']['inputHash']
         assert review['baselineResultId'] == contract['baselineResultId']
-        assert review['reviewedDefinitionIds'] == contract['reviewedDefinitionIds'] == ['CONSISTENCY12_1']
-        assert review['definitionBefore']['id'] == 'CONSISTENCY12_1' and review['definitionBefore']['version'] == '1.0.0'
-        assert review['definitionAfter'] == next(r for r in result['registry'] if r['id'] == 'CONSISTENCY12_1')
+        expected = ['CONSISTENCY12_1', 'MAX1M', 'SIGNED_VP63']
+        assert review['reviewedDefinitionIds'] == contract['reviewedDefinitionIds'] == expected
+        assert set(review['definitionsBefore']) == set(review['definitionsAfter']) == set(expected)
+        for key in expected:
+            assert review['definitionsBefore'][key]['id'] == key and review['definitionsBefore'][key]['version'] == '1.0.0'
+            assert review['definitionsAfter'][key] == next(r for r in result['registry'] if r['id'] == key)
         assert review['unchangedDefinitions'] == dict(status='passed', maximumPermittedRelativeNavRevision=.001, nullMasksPreserved=True)
     assert manifest['scheduledIntegratedRefresh'] == 'active'
     assert manifest['resultIdentity'] == result['resultIdentity']
