@@ -7,7 +7,7 @@ const destination=localUrl(q.get('momentum'),'../');
 const escape=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const pct=v=>typeof v==='number'&&Number.isFinite(v)?`${(v*100).toFixed(2)}%`:'—';
 function cashSummary(row){const claim=Number.isFinite(row.receivableWeight)?row.receivableWeight:0,liquid=Number.isFinite(row.liquidCashWeight)?row.liquidCashWeight:Number.isFinite(row.cashWeight)?Math.max(0,row.cashWeight-claim):null;return `현금 ${pct(liquid)}${claim>0?` · 현금 수취권 ${pct(claim)}`:''}`;}
-const projects=[['Fear & Greed','https://sonchanggi.github.io/fearNgreed/'],['Factor',destination],['DRAM','https://sonchanggi.github.io/dram-price/'],['ETF','https://sonchanggi.github.io/etf-tracking/'],['SOX','https://sonchanggi.github.io/sox/'],['Regime','https://sonchanggi.github.io/regime/'],['News','https://sonchanggi.github.io/news/'],['SPO','https://sonchanggi.github.io/SPO/'],['알파 하우스','https://research-observatory-changgi.changgi-son.chatgpt.site/']];
+const projects=[['Fear & Greed','https://sonchanggi.github.io/fearNgreed/'],['Factor',destination],['DRAM','https://sonchanggi.github.io/dram-price/'],['ETF','https://sonchanggi.github.io/etf-tracking/'],['SOX','https://sonchanggi.github.io/sox/'],['Regime','https://sonchanggi.github.io/regime/'],['News','https://sonchanggi.github.io/news/'],['알파 하우스','https://research-observatory-changgi.changgi-son.chatgpt.site/']];
 document.getElementById('integrated-nav').innerHTML=projects.map(([label,url])=>`<a href="${escape(url)}">${escape(label)}</a>`).join('');
 document.getElementById('momentum-link').href=destination;
 

@@ -15,7 +15,7 @@ class RetirementPreparation(unittest.TestCase):
         self.assertEqual(state['calls'],[])
 
     def test_guide_preserves_exact_current_nav_and_uses_only_explicit_local_target(self):
-        nav='<nav><a href="https://example.com/spo">SPO</a><a>연구 관측소</a><button id="theme-toggle">테마</button></nav>'
+        nav='<nav><a href="https://example.com/news">News</a><a>연구 관측소</a><button id="theme-toggle">테마</button></nav>'
         page,_=guide_page('<html><script src="app.js"></script>'+nav+'</html>','http://127.0.0.1:50073/')
         self.assertIn(nav,page);self.assertNotIn('src="app.js"',page);self.assertIn('href="http://127.0.0.1:50073/"',page)
         with self.assertRaises(ValueError):guide_page(nav,'https://sonchanggi.github.io/factor/')
