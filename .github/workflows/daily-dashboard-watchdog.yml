@@ -208,5 +208,5 @@ jobs:
             fi
             [[ $attempt -lt 12 ]] && sleep 10
           done
-          echo "::error::The public Momentum page or its required JSON is unavailable or invalid."
+          echo "::error::The public Factor page or its required JSON is unavailable or invalid."
           exit 1

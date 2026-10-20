@@ -83,7 +83,7 @@ jobs:
           fi
           echo "sha=${expected_sha}" >> "$GITHUB_OUTPUT"
           {
-            echo "## Momentum Pages deployment identity"
+            echo "## Factor Pages deployment identity"
             echo "- owner: workflow"
             echo "- request origin: \`${REQUEST_ORIGIN}\`"
             echo "- source SHA: \`${expected_sha}\`"
@@ -221,7 +221,7 @@ jobs:
               sleep $((attempt * 5))
             fi
           done
-          echo "Public Momentum Pages readback did not converge to source ${EXPECTED_SOURCE_SHA}." >&2
+          echo "Public Factor Pages readback did not converge to source ${EXPECTED_SOURCE_SHA}." >&2
           exit 1
 
   public-site-health:
@@ -232,7 +232,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Fail only when the existing Momentum page is unusable
+      - name: Fail only when the existing Factor page is unusable
         env:
           PAGE_URL: https://sonchanggi.github.io/factor/
         shell: bash
@@ -266,10 +266,10 @@ jobs:
               fi
             done
             if [[ "$usable" == "true" ]]; then
-              echo "The existing Momentum page remains usable; automatic deploy errors stay in run logs without failure mail."
+              echo "The existing Factor page remains usable; automatic deploy errors stay in run logs without failure mail."
               exit 0
             fi
             [[ $attempt -lt 12 ]] && sleep 10
           done
-          echo "::error::The public Momentum page or its required JSON is unavailable or invalid."
+          echo "::error::The public Factor page or its required JSON is unavailable or invalid."
           exit 1
