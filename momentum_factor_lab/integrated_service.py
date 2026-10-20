@@ -19,7 +19,7 @@ def code_fingerprint():
     names = ('integrated_data.py', 'integrated_factors.py', 'integrated_engine.py',
              'integrated_research.py', 'integrated_service.py', 'backtest.py',
              'portfolio.py', 'metrics.py', 'config.py', 'integrated_variants.py',
-             'integrated_legacy_best.py', 'integrated_repairs.py', 'factors.py',
+             'integrated_legacy_best.py', 'integrated_repairs.py', 'integrated_history.py', 'factors.py',
              'advanced_factors.py', 'universe.py', 'resources/integrated_legacy_map.json',
              'resources/integrated_universe.json')
     records = {name: hashlib.sha256((source / name).read_bytes()).hexdigest()
@@ -194,8 +194,15 @@ def build_site(directory, result):
     directory.mkdir(parents=True, exist_ok=True)
     web = Path(__file__).parent / 'web'
     (directory / 'assets').mkdir(exist_ok=True)
-    for source, target in [('integrated.html', 'index.html'), ('integrated.css', 'assets/integrated.css'), ('integrated.js', 'assets/integrated.js'), ('styles.css', 'assets/styles.css'), ('shared-nav.css', 'assets/shared-nav.css')]:
+    for source, target in [('integrated.html', 'index.html'), ('integrated.css', 'assets/integrated.css'), ('integrated.js', 'assets/integrated.js'), ('integrated_charts.js', 'assets/integrated_charts.js'), ('styles.css', 'assets/styles.css'), ('shared-nav.css', 'assets/shared-nav.css')]:
         shutil.copyfile(web / source, directory / target)
+    entry = directory / 'index.html'
+    body = entry.read_text(encoding='utf-8')
+    for asset in ('integrated.js', 'integrated_charts.js', 'integrated.css'):
+        relative = 'assets/' + asset
+        digest = hashlib.sha256((directory / relative).read_bytes()).hexdigest()[:12]
+        body = body.replace(relative + '"', relative + '?v=' + digest + '"')
+    entry.write_text(body, encoding='utf-8')
     atomic_json(directory / 'data' / 'integrated-result.json', result)
     shutil.copyfile(Path(__file__).parent / 'resources' / 'integrated_legacy_map.json', directory / 'data' / 'legacy-definitions.json')
 

@@ -10,8 +10,9 @@
   </script>
   <link rel="stylesheet" href="assets/styles.css">
   <link rel="stylesheet" href="assets/shared-nav.css">
-  <link rel="stylesheet" href="assets/integrated.css">
-  <script defer src="assets/integrated.js"></script>
+  <link rel="stylesheet" href="assets/integrated.css?v=42b1d3e9ebd1">
+  <script defer src="assets/integrated_charts.js?v=1d138749eb59"></script>
+  <script defer src="assets/integrated.js?v=8c0a15e12b49"></script>
 </head>
 <body id="top" class="has-quant-shared-nav integrated-app">
 <a class="skip-link" href="#main-content">본문으로 건너뛰기</a>
@@ -33,10 +34,11 @@
 <main id="main-content" tabindex="-1" class="lab-shell">
   <header class="lab-heading"><div><p class="lab-eyebrow">Quant Research · Factor Lab</p><h1>모멘텀 팩터 랩</h1></div><div class="lab-context"><span id="data-date">기준일 —</span><span class="lab-badge" id="result-state">불러오는 중</span></div></header>
   <nav class="lab-tabs" aria-label="팩터 랩 화면">
-    <a href="#current" data-view="current" aria-current="page">현재 선택</a><a href="#explore" data-view="explore">팩터 탐색</a><a href="#compare" data-view="compare">비교 <span id="compare-count">0</span></a><a href="#experiments" data-view="experiments">실험</a><a href="#data" data-view="data">데이터</a>
+    <a href="#current" data-view="current" aria-current="page">현재 선택</a><a href="#factor" data-view="factor">단일 팩터</a><a href="#explore" data-view="explore">팩터 탐색</a><a href="#compare" data-view="compare">비교 <span id="compare-count">0</span></a><a href="#experiments" data-view="experiments">실험</a><a href="#data" data-view="data">데이터</a>
   </nav>
   <p id="app-message" class="lab-message" role="status" aria-live="polite">결과를 불러오고 있습니다.</p>
   <section id="view-current" class="lab-view" aria-label="현재 선택"><div id="current-content"></div></section>
+  <section id="view-factor" class="lab-view" aria-label="단일 팩터" hidden><div id="single-factor-content"></div></section>
   <section id="view-explore" class="lab-view" aria-label="팩터 탐색" hidden>
     <div class="lab-toolbar"><label>팩터 찾기<input id="factor-search" type="search" placeholder="이름·ID·가설" autocomplete="off"></label><label>계열<select id="family-filter"><option value="">전체 계열</option></select></label><label>상태<select id="status-filter"><option value="">전체</option><option value="candidate">월별 선택 후보</option><option value="research">연구 전용</option><option value="available">계산 가능</option><option value="unavailable">자료 부족</option></select></label><label>정렬<select id="factor-sort"><option value="catalog">정의 순서</option><option value="score">선택점수</option><option value="cagr">CAGR</option><option value="sortino">Sortino</option><option value="max_drawdown">MDD</option><option value="ic">매수 방향 IC</option></select></label><button class="lab-button secondary" id="export-factors" type="button">CSV 저장</button></div>
     <div id="explore-summary" class="lab-caption"></div><div id="factor-table"></div><section id="factor-detail" hidden aria-label="팩터 상세"></section>

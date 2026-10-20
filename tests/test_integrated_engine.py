@@ -131,6 +131,20 @@ def test_integrated_small_run_future_changes_leave_past_unchanged():
     a = [x for x in first["selection"]["history"] if x["date"] < str(cutoff.date())]
     b = [x for x in second["selection"]["history"] if x["date"] < str(cutoff.date())]
     assert a == b
+    # Fixed-factor execution snapshots have the same causal boundary as the
+    # selection strategy. A future price shock must not rewrite earlier books.
+    fixed_a = [x for x in first['factors'][0]['history']
+               if x['executionDate'] < str(cutoff.date())]
+    fixed_b = [x for x in second['factors'][0]['history']
+               if x['executionDate'] < str(cutoff.date())]
+    assert fixed_a and fixed_a == fixed_b
+    fixed = first['factors'][0]
+    executed = next(x for x in fixed['history'] if x['status'] == 'executed')
+    assert executed['signalDate'] < executed['executionDate'] == executed['holdingsAsOf']
+    assert executed['holdings']  # full retained history reached the result payload
+    assert fixed['latest']['holdingsAsOf'] == str(dates[-1].date())
+    assert {h['symbol']: h['weight'] for h in fixed['latest']['holdings']} == {
+        h['symbol']: h['weight'] for h in fixed['holdings']}
 
 
 def test_all_risk_fail_is_cash_but_missing_nav_defers():
@@ -172,6 +186,14 @@ def test_pending_target_at_exchange_monthend_has_future_execution():
     out = run_integrated_analysis(market, IntegratedConfig(bootstrap_repetitions=0), {"MOM12_1": p})
     assert out["selection"]["pending"]["executionDate"] == "2019-06-03"
     assert out["selection"]["pending"]["executionStatus"] == "pending"
+    fixed = out['factors'][0]
+    pending = fixed['history'][-1]
+    assert pending['status'] == pending['executionStatus'] == 'pending'
+    assert pending['executionDate'] == '2019-06-03'
+    assert pending['holdingsAsOf'] == fixed['latest']['holdingsAsOf'] == '2019-05-31'
+    assert pending['holdings'] == fixed['latest']['holdings']
+    assert pending['targetHoldings']  # separate future instructions, not a fill
+    assert pending['cost'] is None and pending['turnover'] is None
 
 
 def test_stress_executes_each_requested_scenario():
@@ -275,3 +297,6 @@ def test_terminal_missing_held_quote_marks_factor_partial_data():
     assert 0 < row["valuationCoverage"] < 1
     assert row["lastValuedDate"] == str(dates[-2].date())
     assert row["metrics"]["cagr"] is None
+    assert row['latest']['valuationStatus'] == 'last_complete'
+    assert row['latest']['holdingsAsOf'] == str(dates[-2].date())
+    assert row['holdingsAsOf'] == str(dates[-1].date())

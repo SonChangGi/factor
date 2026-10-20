@@ -1,4 +1,7 @@
 """Validate the immutable integrated Pages release and its calculation provenance."""
+import bisect
+from datetime import date
+import math
 import hashlib
 import json
 from pathlib import Path
@@ -6,6 +9,123 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
+
+def validate_fixed_factor_history(sidecar, parent, parent_bytes):
+    """Validate the additive presentation artifact without recomputing a portfolio."""
+    identity = parent['resultIdentity']
+    assert sidecar['schemaVersion'] == 'fixed-factor-history/v1'
+    bindings = dict(parentSha256=hashlib.sha256(parent_bytes).hexdigest(),
+                    parentResultId=identity['resultId'], inputHash=identity['inputHash'],
+                    codeHash=identity['codeHash'], dataAsOf=parent['data']['asOf'])
+    for key, value in bindings.items():
+        assert sidecar[key] == value, f'History parent binding mismatch: {key}'
+    definitions = {row['id']: row for row in parent['registry']}
+    parents = {row['id']: row for row in parent['factors']}
+    assert set(sidecar['factors']) == set(parents) == set(definitions), 'History factor catalog mismatch'
+    eligible = {key for key, row in definitions.items() if row['selectionEligible']}
+    assert sidecar['validation'] == dict(
+        status='passed', fixedFactorsReplayed=len(eligible),
+        financialComparison='exact_parent_nav_drawdown_metrics_ending_holdings_cash'), 'History replay validation mismatch'
+    asof = sidecar['dataAsOf']
+    sessions = sorted({row['date'] for factor in parents.values() for row in factor['nav']})
+    delay = parent['settings']['execution_delay_sessions']
+
+    def valid_date(value):
+        assert isinstance(value, str) and date.fromisoformat(value).isoformat() == value, 'Invalid history date'
+        return value
+
+    def finite(value):
+        return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+    def weights(rows):
+        assert len({r['symbol'] for r in rows}) == len(rows), 'Duplicate holding symbol'
+        assert all(isinstance(r['symbol'], str) and r['symbol'] and finite(r['weight']) and
+                   0 < r['weight'] <= 1 + 1e-9 for r in rows), 'Invalid holding weights'
+        return {r['symbol']: r['weight'] for r in rows}
+
+    def snapshot(row, observed):
+        held = weights(row['holdings'])
+        state = row['valuationStatus']
+        assert state in {'available', 'last_complete', 'unavailable'}, 'Invalid valuation status'
+        if state == 'unavailable':
+            assert not held and row['holdingsAsOf'] is None
+            assert all(row[k] is None for k in ('cashWeight', 'receivableWeight', 'liquidCashWeight'))
+            return
+        valued = valid_date(row['holdingsAsOf'])
+        assert valued <= observed, 'Holdings valued after observation'
+        assert (valued == observed) == (state == 'available'), 'Valuation status/date mismatch'
+        cash, claim, liquid = (row[k] for k in ('cashWeight', 'receivableWeight', 'liquidCashWeight'))
+        assert all(finite(v) and -1e-9 <= v <= 1 + 1e-9 for v in (cash, claim, liquid)), 'Invalid cash or claims'
+        assert abs(cash - claim - liquid) < 1e-9, 'Claims counted incorrectly'
+        assert abs(sum(held.values()) + cash - 1) < 1e-9, 'Holdings and cash do not conserve NAV'
+
+    for key, factor in sidecar['factors'].items():
+        original = parents[key]
+        assert factor['status'] == original['status'], f'History factor status mismatch: {key}'
+        if key not in eligible:
+            assert factor['status'] == 'research_only' and factor['history'] == [] and factor['latest'] is None
+            continue
+        assert factor['historyBasis'] == 'execution_close_actual_weights'
+        assert factor['holdingsAsOf'] == asof
+        history = factor['history']
+        signals = [valid_date(r['signalDate']) for r in history]
+        assert signals == sorted(set(signals)), 'History signals must be unique and sorted'
+        assert signals == [r['signalDate'] for r in parent['selection']['history']], 'History monthly coverage differs from parent'
+        for row in history:
+            signal = row['signalDate']
+            assert row['date'] == signal and signal <= asof
+            execution = row['executionDate']
+            assert execution is not None and valid_date(execution) > signal, 'Execution must follow signal'
+            position = bisect.bisect_right(sessions, signal) + delay - 1
+            if position < len(sessions):
+                assert execution == sessions[position], 'Execution does not match session delay'
+            pending = row['status'] == 'pending'
+            assert row['status'] in {'pending', 'executed', 'valuation_unavailable', 'blocked',
+                                     'deferred', 'awaiting_first_signal', 'not_executed'}
+            assert pending == (execution > asof), 'Pending execution timing mismatch'
+            assert row['targetStatus'] in {'available', 'unavailable'}
+            target = weights(row['targetHoldings'])
+            assert finite(row['targetCashWeight']) and -1e-9 <= row['targetCashWeight'] <= 1 + 1e-9
+            assert abs(sum(target.values()) + row['targetCashWeight'] - 1) < 1e-9, 'Target weights do not conserve NAV'
+            snapshot(row, asof if pending else execution)
+            if pending:
+                assert row['executionStatus'] == 'pending' and row['turnover'] is None and row['cost'] is None
+            else:
+                assert all(finite(row[k]) and row[k] >= 0 for k in ('turnover', 'cost'))
+                if row['status'] == 'executed':
+                    assert row['executionStatus'].startswith('executed') and row['targetStatus'] == 'available'
+                    assert row['holdingsAsOf'] == execution, 'Executed holdings use the wrong close'
+                elif row['status'] == 'blocked':
+                    assert row['executionStatus'].startswith('blocked_')
+                elif row['status'] == 'valuation_unavailable':
+                    assert row['valuationStatus'] != 'available'
+        latest = factor['latest']
+        snapshot(latest, asof)
+        assert weights(latest['holdings']) == weights(original['holdings']), 'Latest holdings differ from parent'
+        for field in ('cashWeight', 'receivableWeight', 'liquidCashWeight'):
+            assert latest[field] == original[field], f'Latest {field} differs from parent'
+    return bindings
+
+
+def validate_history_publication(site, manifest, result):
+    contract = manifest['fixedFactorHistory']
+    relative = contract['path']
+    assert relative == 'data/fixed-factor-history.json', 'Unexpected history path'
+    sidecar = json.loads((site / relative).read_text())
+    bindings = validate_fixed_factor_history(sidecar, result, (site / 'data/integrated-result.json').read_bytes())
+    for key, value in bindings.items():
+        assert contract[key] == value, f'History manifest binding mismatch: {key}'
+    assert contract['validation'] == sidecar['validation']
+    sources = {'momentum_factor_lab/integrated_history.py', 'scripts/export_fixed_factor_history.py'}
+    assert set(contract['sourceFiles']) == sources, 'History source catalog mismatch'
+    for name, digest in contract['sourceFiles'].items():
+        assert hashlib.sha256((ROOT / name).read_bytes()).hexdigest() == digest, f'History source mismatch: {name}'
+    html = (site / 'index.html').read_text()
+    asset = 'assets/integrated_charts.js'
+    assert asset in manifest['files'] and asset in html, 'Missing shared chart asset'
+    assert html.index(asset) < html.index('assets/integrated.js'), 'Chart dependency must load first'
+    assert relative in (site / 'assets/integrated.js').read_text(), 'History asset is not consumed'
+
 
 def validate(site=ROOT / 'site'):
     site = Path(site)
@@ -50,6 +170,7 @@ def validate(site=ROOT / 'site'):
         assert asset in html and asset in expected
     assert 'data/integrated-result.json' in (site / 'assets/integrated.js').read_text()
     assert 'data/dashboard.json' not in (site / 'assets/integrated.js').read_text()
+    validate_history_publication(site, manifest, result)
     assert manifest['scheduledIntegratedRefresh'] == 'not_activated'
     print(f"PASS integrated publication: {identity['resultId']}, {len(expected)+1} files, source {source}")
     return manifest

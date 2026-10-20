@@ -2,7 +2,7 @@
 
 Momentum과 Best의 합집합 2,960종목을 사용해 가격·거래량 32개 정의를 연구하고, 26개 후보 중에서 매월 팩터를 선택합니다. 최근 756거래일의 비용 후 CAGR·Sortino·Calmar·MDD·기간 안정성을 비교하며 실제 보유에서 다음 거래일 종가 목표로 이동하는 회계를 계산합니다.
 
-[통합 화면](https://sonchanggi.github.io/momentum-factor-lab/)은 현재 선택·팩터 탐색·비교·실험·데이터를 제공합니다. [통합 사용법](docs/development/integrated-local.md), [데이터 계약](docs/development/integrated-data-contract.md), [성과 감사](docs/development/performance-repair-2026-10-20.md), [배포 계약](docs/development/deployment-2026-10-20.md)을 참고하세요.
+[통합 화면](https://sonchanggi.github.io/momentum-factor-lab/)은 현재 선택·단일 팩터·팩터 탐색·비교·실험·데이터를 제공합니다. 단일 팩터에서 통합 정의를 선택하면 전체 비용 후 성과와 신호월별 실제 보유 종목·비중을 조회합니다. [통합 사용법](docs/development/integrated-local.md), [데이터 계약](docs/development/integrated-data-contract.md), [성과 감사](docs/development/performance-repair-2026-10-20.md), [배포 계약](docs/development/deployment-2026-10-20.md)을 참고하세요.
 
 ```bash
 python -m momentum_factor_lab.cli integrated-run --snapshot <frozen-snapshot> --output <new-run-directory>

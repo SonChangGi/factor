@@ -30,3 +30,42 @@ def test_reject_invalid_execution_inputs(settings):
 def test_incomplete_result_not_publishable():
     with pytest.raises(ValueError):
         validate_result({"selection": {}, "factors": []})
+
+
+def test_static_build_copies_hover_chart_dependency_and_versions_exact_assets(tmp_path):
+    import hashlib
+    import re
+    from pathlib import Path
+    import momentum_factor_lab.integrated_service as service
+
+    result = {'schemaVersion': 'integrated-factor/v1', 'factors': [
+        {'id': 'MOM12_1', 'history': [{'signalDate': '2020-01-31', 'holdings': []}]}]}
+    service.build_site(tmp_path, result)
+    source_web = Path(service.__file__).parent / 'web'
+    html = (tmp_path / 'index.html').read_text()
+    for name in ('integrated.js', 'integrated_charts.js', 'integrated.css'):
+        path = tmp_path / 'assets' / name
+        assert path.read_bytes() == (source_web / name).read_bytes()
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()[:12]
+        assert f'assets/{name}?v={digest}"' in html
+    # Deferred dependency order matters: the UI needs the hover renderer when
+    # it first renders. Both paths must resolve under a project URL prefix.
+    assert html.index('assets/integrated_charts.js') < html.index('assets/integrated.js')
+    assert not re.search(r'(?:src|href)="/assets/', html)
+    assert json.loads((tmp_path / 'data' / 'integrated-result.json').read_text()) == result
+
+
+def test_fixed_history_accounting_changes_invalidate_calculation_fingerprint(tmp_path, monkeypatch):
+    from pathlib import Path
+    import momentum_factor_lab.integrated_service as service
+
+    source = Path(service.__file__).parent
+    history = tmp_path / 'integrated_history.py'
+    history.write_bytes((source / 'integrated_history.py').read_bytes())
+    monkeypatch.setattr(service, '__file__', str(tmp_path / 'integrated_service.py'))
+    before, records = service.code_fingerprint()
+    assert 'integrated_history.py' in records
+    history.write_text(history.read_text() + '\n# accounting revision\n')
+    after, changed = service.code_fingerprint()
+    assert after != before
+    assert changed['integrated_history.py'] != records['integrated_history.py']

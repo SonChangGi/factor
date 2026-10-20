@@ -26,6 +26,7 @@ from .integrated_research import (
     conditional_exposures,
 )
 from .integrated_repairs import backtest_inputs
+from .integrated_history import fixed_factor_history
 
 
 @dataclass
@@ -416,6 +417,9 @@ def run_integrated_analysis(market, config=None, factors=None, *, progress_callb
                 execution_delay_sessions=config.execution_delay_sessions,
                 **backtest_inputs(market, run_index),
             )
+            row.update(fixed_factor_history(result, allocations, run_index,
+                                            config.execution_delay_sessions,
+                                            next_execution=next_execution))
             returns_by_id[key] = result.returns
             intervals_by_id[key] = result.return_interval_sessions
             for date in dates:
