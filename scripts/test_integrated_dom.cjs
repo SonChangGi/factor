@@ -21,7 +21,6 @@ for(const scenario of [{url:'https://sonchanggi.github.io/factor/',api:'unused',
  assert(calls.some(c=>c.url===new URL('data/integrated-result.json',scenario.url).href),'snapshot remains relative to project base path');if(scenario.api==='unused')assert.equal(calls.some(c=>c.url.includes('/api/')),false,'public static site never probes a root API');
  d.querySelector('[data-view="explore"]').click();assert.equal(d.querySelectorAll('#factor-table tbody tr').length,fixture.factors.length);d.querySelector('[data-view="data"]').click();assert(d.getElementById('data-content').textContent.includes('입력 데이터'));assert(d.getElementById('data-content').textContent.includes('가격 보유(벤치마크 포함)'));if(scenario.url.startsWith('http://localhost'))assert.equal(d.querySelector('.quant-shared-nav__brand').href,new URL('hub/',scenario.url).href,'local static Hub keeps the project base path');w.close();
 }
-if(process.env.MFL_BEST_GUIDE){const best=fs.readFileSync(process.env.MFL_BEST_GUIDE,'utf8');for(const url of ['https://sonchanggi.github.io/best-factor/','http://localhost:8755/']){const dom=new JSDOM(best,{url,runScripts:'outside-only'});dom.window.eval([...dom.window.document.scripts].at(-1).textContent);assert.equal(dom.window.document.getElementById('integrated-momentum-link').href,'https://sonchanggi.github.io/factor/');dom.window.close();}}
 console.log('PASS static DOM: project base path, public read-only mode, offline and invalid API, blocked submissions, Best destination');
 }
 async function receivableModes(){for(const fixed of [false,true]){

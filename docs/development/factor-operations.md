@@ -1,6 +1,6 @@
 # Factor 운영
 
-공개 주소는 `/factor/`, Python 패키지는 `factor_lab`, 명령은 `factor`입니다. 이전 `/momentum-factor-lab/`는 새 주소 안내와 기존 immutable 데이터 경로만 제공합니다. Best는 종료 안내만 제공하며 수집·계산에 참여하지 않습니다.
+공개 주소는 `/factor/`, Python 패키지는 `factor_lab`, 명령은 `factor`입니다. 이전 `/momentum-factor-lab/`는 새 주소 안내와 기존 immutable 데이터 경로만 제공합니다. Best 전용 저장소·예약·실행 경로·자료는 2026-10-21 최종 삭제했습니다. 이관한 팩터 정의와 95종목은 Factor의 공통 입력으로 유지합니다. [최종 정리 기록](best-retirement-2026-10-21.md)
 
 ## 정기 실행
 
