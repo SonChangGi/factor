@@ -6,6 +6,13 @@ import subprocess
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
+HISTORY_RELEASE = '3df7d85c98dd1c42b822ee5a4ff89a274a614e30'
+
+
+def historical_file(relative):
+    return subprocess.check_output(['git', 'show', f'{HISTORY_RELEASE}:{relative}'], cwd=ROOT)
+
+
 spec = importlib.util.spec_from_file_location('publication_validator', ROOT / 'scripts/validate_integrated_publication.py')
 validator = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(validator)
@@ -73,8 +80,10 @@ def test_legacy_control_artifacts_remain_exact_and_cannot_replace_integrated_res
 @pytest.fixture
 def fixed_history():
     import json
-    parent_bytes = (ROOT / 'site/data/integrated-result.json').read_bytes()
-    return (json.loads((ROOT / 'site/data/fixed-factor-history.json').read_text()),
+    # V2 embeds monthly holdings. Keep mutation tests of the historical V1
+    # sidecar bound to the original released parent, rather than a live file.
+    parent_bytes = historical_file('site/data/integrated-result.json')
+    return (json.loads(historical_file('site/data/fixed-factor-history.json')),
             json.loads(parent_bytes), parent_bytes)
 
 
@@ -123,10 +132,14 @@ def test_fixed_history_rejects_financial_and_timing_corruption(fixed_history, mu
         validator.validate_fixed_factor_history(history, parent, body)
 
 
-def test_history_source_hash_is_verified(fixed_history):
+def test_history_source_hash_is_verified(fixed_history, tmp_path):
     import json
     history, parent, body = fixed_history
-    manifest = json.loads((ROOT / 'site/publication.json').read_text())
+    manifest = json.loads(historical_file('site/publication.json'))
+    manifest['fixedFactorHistory']['extractionSourceCommit'] = HISTORY_RELEASE
+    (tmp_path / 'data').mkdir()
+    (tmp_path / 'data/integrated-result.json').write_bytes(body)
+    (tmp_path / 'data/fixed-factor-history.json').write_bytes(historical_file('site/data/fixed-factor-history.json'))
     manifest['fixedFactorHistory']['sourceFiles']['momentum_factor_lab/integrated_history.py'] = '0' * 64
     with pytest.raises(AssertionError, match='History source mismatch'):
-        validator.validate_history_publication(ROOT / 'site', manifest, parent)
+        validator.validate_history_publication(tmp_path, manifest, parent)
