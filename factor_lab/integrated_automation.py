@@ -223,7 +223,13 @@ def seed_download_cache(reuse_root, destination, target):
     if request['endExclusive'] != expected_end or manifest['dataAsOf'] != target:
         raise ValueError('Reused input cache belongs to a different completed session')
     destination.mkdir(parents=True, exist_ok=False)
-    shutil.copyfile(source / 'request.json', destination / 'request.json')
+    # Preserve the old request separately. Batch alias keys prevent reusing its
+    # obsolete provider-symbol response; unchanged symbols keep their caches.
+    shutil.copyfile(source / 'request.json', destination / 'reuse-source-request.json')
+    from .integrated_listing import listing_context
+    from .integrated_data import BENCHMARKS
+    request['listing'] = listing_context(sorted(set(request['symbols']) | set(BENCHMARKS)), target)
+    (destination / 'request.json').write_text(json.dumps(request, indent=2) + '\n')
     downloads = source / 'downloads'
     for path in downloads.rglob('*'):
         if path.is_symlink():

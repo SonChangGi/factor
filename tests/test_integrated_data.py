@@ -358,8 +358,10 @@ def test_immutable_snapshot_rechecks_reference_prefix_not_total_count(tmp_path):
     dates=pd.to_datetime(['2025-01-02','2025-01-03','2025-01-06'])
     prices=pd.DataFrame({'A':[10.]*3},index=dates)
     volumes=prices*0+100
+    from factor_lab.integrated_listing import listing_context
     market=IntegratedMarket(prices,prices,prices,prices,prices,volumes,prices*0,prices*0,
-        prices.notna(),dict(request=dict(start='2025-01-01',endExclusive='2025-02-01',symbols=['A']),
+        prices.notna(),dict(request=dict(start='2025-01-01',endExclusive='2025-02-01',symbols=['A'],
+            listing=listing_context(['A'],'2025-01-31')),
         inputCoverage={'A':dict(observations=3,firstObservation='2025-01-02',asOf='2025-01-06')}))
     save_integrated_market(market,tmp_path)
     with pytest.raises(ValueError,match='Immutable snapshot has truncated'):

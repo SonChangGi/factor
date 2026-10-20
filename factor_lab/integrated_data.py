@@ -341,6 +341,7 @@ def collect_integrated_market(output_dir: Path, start="2010-01-01", end=None, sy
     """
     import yfinance as yf
 
+    from .integrated_listing import listing_context, provider_symbols, batch_cache_key, normalize_provider_columns
     reference_coverage = reference_coverage or {}
     root = Path(output_dir)
     if (root / "manifest.json").exists():
@@ -357,6 +358,9 @@ def collect_integrated_market(output_dir: Path, start="2010-01-01", end=None, sy
         )
         if previous.get("symbols") != expected:
             raise ValueError("Immutable snapshot belongs to a different universe request")
+        context = listing_context(expected, pd.Timestamp(previous['endExclusive']) - pd.Timedelta(days=1))
+        if previous.get('listing') != context:
+            raise ValueError('Immutable snapshot belongs to a different dated listing contract')
         for symbol, expected in reference_coverage.items():
             paired = pd.DataFrame({('Adj Close', symbol): existing.prices[symbol],
                                    ('Volume', symbol): existing.volumes[symbol]})
@@ -373,7 +377,9 @@ def collect_integrated_market(output_dir: Path, start="2010-01-01", end=None, sy
     # Historical output still requires all later corporate actions because
     # Yahoo retroactively split-adjusts the entire downloaded price history.
     download_end = max(pd.Timestamp(end), today + pd.Timedelta(days=1)).date().isoformat()
+    context = listing_context(sorted(set(requested) | set(BENCHMARKS)), pd.Timestamp(end) - pd.Timedelta(days=1))
     request = {
+        "listing": context,
         "start": start,
         "endExclusive": end,
         "providerEndExclusive": download_end,
@@ -404,7 +410,8 @@ def collect_integrated_market(output_dir: Path, start="2010-01-01", end=None, sy
     archive_symbols = set()
     for offset in range(0, len(all_symbols), 25):
         batch = all_symbols[offset : offset + 25]
-        key = hashlib.sha256(json.dumps(batch).encode()).hexdigest()[:16]
+        key = batch_cache_key(batch, context)
+        provider_batch = list(provider_symbols(batch, context).values())
         path = cache / f"{key}.csv.gz"
         receipt = cache / f"{key}.json"
         data = None
@@ -417,7 +424,7 @@ def collect_integrated_market(output_dir: Path, start="2010-01-01", end=None, sy
             for attempt in range(3):
                 try:
                     data = yf.download(
-                        batch,
+                        provider_batch,
                         start=start,
                         end=download_end,
                         auto_adjust=False,
@@ -440,17 +447,24 @@ def collect_integrated_market(output_dir: Path, start="2010-01-01", end=None, sy
                         time.sleep(1 + attempt)
             if data is not None:
                 if not isinstance(data.columns, pd.MultiIndex):
-                    data.columns = pd.MultiIndex.from_product([data.columns, batch])
+                    data.columns = pd.MultiIndex.from_product([data.columns, provider_batch])
                 data.index = pd.to_datetime(data.index).tz_localize(None).normalize()
                 data.to_csv(path, compression={"method": "gzip", "mtime": 0})
                 info = {
                     "symbols": batch,
+                    "providerSymbols": provider_symbols(batch, context),
+                    "listingVersion": context["version"],
+                    "listingSourceHash": context["sourceHash"],
                     "retrievedAt": datetime.now(timezone.utc).isoformat(),
                     "sha256": _hash(path),
                 }
                 receipt.write_text(json.dumps(info, indent=2) + "\n")
         if data is None:
             continue
+        expected_providers = provider_symbols(batch, context)
+        if info.get('providerSymbols', dict(zip(batch, batch))) != expected_providers:
+            raise ValueError('Cached provider identities differ from dated listing contract')
+        data = normalize_provider_columns(data, batch, context)
         receipts.append(info)
         for symbol in batch:
             issue = history_coverage_issue(data, symbol, reference_coverage)
@@ -458,7 +472,7 @@ def collect_integrated_market(output_dir: Path, start="2010-01-01", end=None, sy
             if missing or issue:
                 # Retry incomplete histories as well as wholly empty columns.
                 # Keep the original batch and each rejected response immutable.
-                stem = 'single-' + hashlib.sha256(symbol.encode()).hexdigest()[:16]
+                stem = 'single-' + (hashlib.sha256(symbol.encode()).hexdigest()[:16] if expected_providers[symbol] == symbol else batch_cache_key([symbol], context))
                 if issue:
                     stem += '-coverage'
                 single_path = cache / (stem + '.csv.gz')
@@ -469,17 +483,18 @@ def collect_integrated_market(output_dir: Path, start="2010-01-01", end=None, sy
                     if _hash(single_path) != single_info['sha256']:
                         raise ValueError(f'Corrupt single-symbol download: {symbol}')
                     candidate = pd.read_csv(single_path, header=[0, 1], index_col=0, parse_dates=True)
+                    if single_info.get('providerSymbols', {symbol: symbol}) != {symbol: expected_providers[symbol]}:
+                        raise ValueError('Cached single-symbol provider identity differs')
+                    candidate = normalize_provider_columns(candidate, [symbol], context)
                     if not history_coverage_issue(candidate, symbol, reference_coverage):
                         single = candidate
                 if single is None:
                     for attempt in range(2):
                         try:
-                            candidate = yf.download([symbol], start=start, end=download_end,
+                            raw_candidate = yf.download([expected_providers[symbol]], start=start, end=download_end,
                                 auto_adjust=False, actions=True, repair=False, keepna=True,
                                 progress=False, threads=False, timeout=30, group_by='column')
-                            if not isinstance(candidate.columns, pd.MultiIndex):
-                                candidate.columns = pd.MultiIndex.from_product([candidate.columns, [symbol]])
-                            candidate.index = pd.to_datetime(candidate.index).tz_localize(None).normalize()
+                            candidate = normalize_provider_columns(raw_candidate, [symbol], context)
                             if ('Adj Close', symbol) not in candidate or candidate[('Adj Close', symbol)].dropna().empty:
                                 raise ValueError('No adjusted price observations')
                             # A successful HTTP response may still be truncated.
@@ -491,8 +506,11 @@ def collect_integrated_market(output_dir: Path, start="2010-01-01", end=None, sy
                                 suffix = '-attempt-' + str(sequence)
                             single_path = cache / (stem + suffix + '.csv.gz')
                             single_receipt = single_path.with_suffix('.json')
-                            candidate.to_csv(single_path, compression={'method':'gzip', 'mtime':0})
-                            single_info = dict(symbols=[symbol], retrievedAt=datetime.now(timezone.utc).isoformat(),
+                            if not isinstance(raw_candidate.columns, pd.MultiIndex):
+                                raw_candidate.columns = pd.MultiIndex.from_product([raw_candidate.columns, [expected_providers[symbol]]])
+                            raw_candidate.to_csv(single_path, compression={'method':'gzip', 'mtime':0})
+                            single_info = dict(symbols=[symbol], providerSymbols={symbol: expected_providers[symbol]},
+                                listingVersion=context['version'], listingSourceHash=context['sourceHash'], retrievedAt=datetime.now(timezone.utc).isoformat(),
                                 sha256=_hash(single_path), retryOf=key,
                                 retryReason=issue or 'missing_adjusted_price')
                             bad = history_coverage_issue(candidate, symbol, reference_coverage)
@@ -561,6 +579,7 @@ def collect_integrated_market(output_dir: Path, start="2010-01-01", end=None, sy
     )
     metadata = {
         "requestedSymbols": requested,
+        "listing": context,
         "failedSymbols": failures,
         "universeVersion": universe["version"],
         "dataAsOf": str(output_calendar[-1].date()),

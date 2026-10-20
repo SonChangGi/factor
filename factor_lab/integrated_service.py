@@ -34,7 +34,7 @@ def code_fingerprint():
              'integrated_research.py', 'integrated_service.py', 'backtest.py',
              'portfolio.py', 'metrics.py', 'config.py', 'integrated_variants.py',
              'integrated_legacy_best.py', 'integrated_repairs.py', 'integrated_history.py',
-             'integrated_automation.py', 'integrated_validation.py', 'integrated_archive.py',
+             'integrated_automation.py', 'integrated_validation.py', 'integrated_archive.py', 'integrated_listing.py', 'resources/integrated_listing_transitions.json',
              'resources/integrated_market_policy.json', 'factors.py',
              'advanced_factors.py', 'universe.py', 'resources/integrated_legacy_map.json',
              'resources/integrated_universe.json')
@@ -122,6 +122,7 @@ def data_inventory(market):
         for symbol in receipt.get('symbols', []):
             collected[symbol] = receipt.get('retrievedAt')
     rows = []
+    listings = {row['symbol']: row for row in market.metadata.get('listing', {}).get('transitions', [])}
     quarantines = {r['symbol']: r for r in market.metadata.get('amendments', [])
                    if r['kind'] == 'unverified_input_quarantine'}
     exchanges = {r['symbol']: r for r in market.metadata.get('corporateActions', [])}
@@ -142,7 +143,13 @@ def data_inventory(market):
         '평균 거래대금 $5M 미만': dollar_volume.tail(63).mean().ge(5_000_000),
     }
     for symbol in market.metadata['requestedSymbols']:
-        source = origins.get(symbol, {})
+        source = dict(origins.get(symbol, {}))
+        if symbol in listings:
+            listing = listings[symbol]
+            source.update(providerTicker=listing['providerTicker'], exchange=listing['exchange'],
+                          listingEffectiveDate=listing['effectiveDate'], listingSources=listing['sources'])
+            if listing.get('name'):
+                source['name'] = listing['name']
         observations = market.prices[symbol].dropna()
         eligible = bool(market.eligibility[symbol].iloc[-1])
         failure = market.metadata.get('failedSymbols', {}).get(symbol)

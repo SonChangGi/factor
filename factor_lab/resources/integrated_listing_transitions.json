@@ -1,0 +1,24 @@
+{
+  "version": "listing-transitions-2026-10-19-v1",
+  "identityPolicy": "Canonical union membership is unchanged. Dated provider and venue identities do not convert shares or infer prices.",
+  "transitions": [
+    {
+      "symbol": "CECO", "effectiveDate": "2026-10-19", "type": "primary_listing_transfer",
+      "providerTicker": "CECO", "exchange": "TXSE", "previousExchange": "Nasdaq",
+      "sameSecurity": true, "cusipUnchanged": true,
+      "sources": ["https://www.sec.gov/Archives/edgar/data/3197/000119312526413794/ceco-ex99_1.htm", "https://www.txse.com/alerts/46beeccd-5180-4ff7-8d2d-18469e42c8b0"]
+    },
+    {
+      "symbol": "IBOC", "effectiveDate": "2026-10-19", "type": "primary_listing_transfer",
+      "providerTicker": "IBOC", "exchange": "TXSE", "previousExchange": "Nasdaq",
+      "sameSecurity": true,
+      "sources": ["https://www.sec.gov/Archives/edgar/data/315709/000110465926113899/tm2627039d1_ex99-1.htm", "https://www.txse.com/alerts/ce08992b-997d-4602-ac9b-66e4d1bd6682"]
+    },
+    {
+      "symbol": "UUU", "effectiveDate": "2026-10-19", "type": "name_and_ticker_change",
+      "providerTicker": "DCM", "exchange": "NYSE American", "name": "DeFi Capital Markets Inc.",
+      "sameSecurity": true, "cusipUnchanged": true,
+      "sources": ["https://www.sec.gov/Archives/edgar/data/102109/000110465926114373/tm2627199d1_ex99-1.htm"]
+    }
+  ]
+}
