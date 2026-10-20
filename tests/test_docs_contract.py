@@ -233,8 +233,10 @@ def test_pages_workflow_has_one_owner_current_main_and_exact_readback() -> None:
     assert "actions/deploy-pages@" in pages
     assert "find public -type f -print0" in pages
     assert "path: public" in pages
-    assert "python scripts/build_integrated_publication.py --output public" in pages
-    assert "python scripts/validate_integrated_publication.py site" in pages
+    assert "bash scripts/check_release.sh public" in pages
+    release = (ROOT / "scripts/check_release.sh").read_text()
+    assert "python scripts/build_integrated_publication.py --output" in release
+    assert "python scripts/validate_integrated_publication.py site" in release
     assert '--header "Cache-Control: no-cache"' in pages
     assert "--connect-timeout 10" in pages
     assert "--max-time 120" in pages

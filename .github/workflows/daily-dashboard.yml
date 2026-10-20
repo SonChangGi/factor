@@ -103,7 +103,7 @@ jobs:
       - name: Install locked live-data runtime
         run: |
           python -m pip install uv==0.11.17
-          uv sync --frozen --extra live --python "$(command -v python)"
+          uv sync --frozen --extra live --extra dev --python "$(command -v python)"
           echo "${GITHUB_WORKSPACE}/.venv/bin" >> "$GITHUB_PATH"
       - name: Recheck admission on a failed-job retry
         if: github.run_attempt != '1'
@@ -121,6 +121,12 @@ jobs:
           [[ "${WATCHDOG_ORIGIN}" != true ]] || event=schedule
           python -m factor_lab.integrated_automation freshness \
             --site site --event-name "${event}" >> "$GITHUB_OUTPUT"
+      - name: Check daily release compatibility before collection
+        if: steps.freshness.outputs.skip != 'true'
+        run: |
+          python scripts/release_preflight.py --mode daily
+          python -m pytest -q tests/test_integrated_automation.py::test_fresh_spy_does_not_hide_widespread_stale_equities
+
       - name: Resolve the explicitly requested immutable input cache
         id: reuse
         if: steps.freshness.outputs.skip != 'true'

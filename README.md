@@ -267,6 +267,8 @@ uv run python -m factor_lab.cli run \
 
 ## 검증
 
+릴리스 전에는 [공통 배포 전 검사](docs/development/release-preflight.md)를 실행합니다. 화면 파일만 수정했을 때의 manifest 준비와 PR·Pages·일별 계산의 검사 범위도 이 문서에 정리되어 있습니다.
+
 ```bash
 uv run pytest -q
 uv run ruff check factor_lab tests scripts
