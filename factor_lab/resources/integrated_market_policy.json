@@ -12,7 +12,11 @@
       "volume": 172695,
       "sourceUrl": "https://stockanalysis.com/stocks/lbrda/history/",
       "retrievedAt": "2026-10-20T01:15:38.167284+00:00",
-      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval"
+      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval",
+      "closePrecision": {
+        "kind": "decimal",
+        "places": 2
+      }
     },
     {
       "symbol": "LBRDA",
@@ -25,7 +29,11 @@
       "volume": 148849,
       "sourceUrl": "https://stockanalysis.com/stocks/lbrda/history/",
       "retrievedAt": "2026-10-20T01:15:38.167280+00:00",
-      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval"
+      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval",
+      "closePrecision": {
+        "kind": "decimal",
+        "places": 2
+      }
     },
     {
       "symbol": "LBRDA",
@@ -38,7 +46,11 @@
       "volume": 262611,
       "sourceUrl": "https://stockanalysis.com/stocks/lbrda/history/",
       "retrievedAt": "2026-10-20T01:15:38.167277+00:00",
-      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval"
+      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval",
+      "closePrecision": {
+        "kind": "decimal",
+        "places": 2
+      }
     },
     {
       "symbol": "LBRDA",
@@ -51,7 +63,11 @@
       "volume": 255240,
       "sourceUrl": "https://stockanalysis.com/stocks/lbrda/history/",
       "retrievedAt": "2026-10-20T01:15:38.167273+00:00",
-      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval"
+      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval",
+      "closePrecision": {
+        "kind": "decimal",
+        "places": 2
+      }
     },
     {
       "symbol": "LBRDA",
@@ -64,7 +80,11 @@
       "volume": 400622,
       "sourceUrl": "https://stockanalysis.com/stocks/lbrda/history/",
       "retrievedAt": "2026-10-20T01:15:38.167269+00:00",
-      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval"
+      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval",
+      "closePrecision": {
+        "kind": "decimal",
+        "places": 2
+      }
     },
     {
       "symbol": "LBRDA",
@@ -77,7 +97,11 @@
       "volume": 202532,
       "sourceUrl": "https://stockanalysis.com/stocks/lbrda/history/",
       "retrievedAt": "2026-10-20T01:15:38.167265+00:00",
-      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval"
+      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval",
+      "closePrecision": {
+        "kind": "decimal",
+        "places": 2
+      }
     },
     {
       "symbol": "LBRDA",
@@ -90,7 +114,11 @@
       "volume": 208117,
       "sourceUrl": "https://stockanalysis.com/stocks/lbrda/history/",
       "retrievedAt": "2026-10-20T01:15:38.167261+00:00",
-      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval"
+      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval",
+      "closePrecision": {
+        "kind": "decimal",
+        "places": 2
+      }
     },
     {
       "symbol": "LBRDA",
@@ -103,7 +131,11 @@
       "volume": 340387,
       "sourceUrl": "https://stockanalysis.com/stocks/lbrda/history/",
       "retrievedAt": "2026-10-20T01:15:38.167257+00:00",
-      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval"
+      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval",
+      "closePrecision": {
+        "kind": "decimal",
+        "places": 2
+      }
     },
     {
       "symbol": "LBRDA",
@@ -116,7 +148,11 @@
       "volume": 208367,
       "sourceUrl": "https://stockanalysis.com/stocks/lbrda/history/",
       "retrievedAt": "2026-10-20T01:15:38.167254+00:00",
-      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval"
+      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval",
+      "closePrecision": {
+        "kind": "decimal",
+        "places": 2
+      }
     },
     {
       "symbol": "LBRDA",
@@ -129,7 +165,11 @@
       "volume": 200548,
       "sourceUrl": "https://stockanalysis.com/stocks/lbrda/history/",
       "retrievedAt": "2026-10-20T01:15:38.167250+00:00",
-      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval"
+      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval",
+      "closePrecision": {
+        "kind": "decimal",
+        "places": 2
+      }
     },
     {
       "symbol": "LBRDA",
@@ -142,7 +182,11 @@
       "volume": 184227,
       "sourceUrl": "https://stockanalysis.com/stocks/lbrda/history/",
       "retrievedAt": "2026-10-20T01:15:38.167246+00:00",
-      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval"
+      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval",
+      "closePrecision": {
+        "kind": "decimal",
+        "places": 2
+      }
     },
     {
       "symbol": "LBRDA",
@@ -155,7 +199,11 @@
       "volume": 319960,
       "sourceUrl": "https://stockanalysis.com/stocks/lbrda/history/",
       "retrievedAt": "2026-10-20T01:15:38.167241+00:00",
-      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval"
+      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval",
+      "closePrecision": {
+        "kind": "decimal",
+        "places": 2
+      }
     },
     {
       "symbol": "LBRDA",
@@ -168,7 +216,11 @@
       "volume": 179084,
       "sourceUrl": "https://stockanalysis.com/stocks/lbrda/history/",
       "retrievedAt": "2026-10-20T01:15:38.167237+00:00",
-      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval"
+      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval",
+      "closePrecision": {
+        "kind": "decimal",
+        "places": 2
+      }
     },
     {
       "symbol": "LBRDA",
@@ -181,7 +233,11 @@
       "volume": 152068,
       "sourceUrl": "https://stockanalysis.com/stocks/lbrda/history/",
       "retrievedAt": "2026-10-20T01:15:38.167233+00:00",
-      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval"
+      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval",
+      "closePrecision": {
+        "kind": "decimal",
+        "places": 2
+      }
     },
     {
       "symbol": "LBRDA",
@@ -194,7 +250,11 @@
       "volume": 146871,
       "sourceUrl": "https://stockanalysis.com/stocks/lbrda/history/",
       "retrievedAt": "2026-10-20T01:15:38.167229+00:00",
-      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval"
+      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval",
+      "closePrecision": {
+        "kind": "decimal",
+        "places": 2
+      }
     },
     {
       "symbol": "LBRDA",
@@ -207,7 +267,11 @@
       "volume": 160361,
       "sourceUrl": "https://stockanalysis.com/stocks/lbrda/history/",
       "retrievedAt": "2026-10-20T01:15:38.167224+00:00",
-      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval"
+      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval",
+      "closePrecision": {
+        "kind": "decimal",
+        "places": 2
+      }
     },
     {
       "symbol": "LBRDA",
@@ -220,7 +284,11 @@
       "volume": 170690,
       "sourceUrl": "https://stockanalysis.com/stocks/lbrda/history/",
       "retrievedAt": "2026-10-20T01:15:38.167219+00:00",
-      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval"
+      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval",
+      "closePrecision": {
+        "kind": "decimal",
+        "places": 2
+      }
     },
     {
       "symbol": "LBRDA",
@@ -233,7 +301,11 @@
       "volume": 114130,
       "sourceUrl": "https://stockanalysis.com/stocks/lbrda/history/",
       "retrievedAt": "2026-10-20T01:15:38.167214+00:00",
-      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval"
+      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval",
+      "closePrecision": {
+        "kind": "decimal",
+        "places": 2
+      }
     },
     {
       "symbol": "LBRDA",
@@ -246,7 +318,11 @@
       "volume": 159155,
       "sourceUrl": "https://stockanalysis.com/stocks/lbrda/history/",
       "retrievedAt": "2026-10-20T01:15:38.167206+00:00",
-      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval"
+      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval",
+      "closePrecision": {
+        "kind": "decimal",
+        "places": 2
+      }
     },
     {
       "symbol": "LBRDA",
@@ -259,7 +335,11 @@
       "volume": 65229,
       "sourceUrl": "https://stockanalysis.com/stocks/lbrda/history/",
       "retrievedAt": "2026-10-20T01:15:38.167200+00:00",
-      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval"
+      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval",
+      "closePrecision": {
+        "kind": "decimal",
+        "places": 2
+      }
     },
     {
       "symbol": "LBRDA",
@@ -272,7 +352,11 @@
       "volume": 118703,
       "sourceUrl": "https://stockanalysis.com/stocks/lbrda/history/",
       "retrievedAt": "2026-10-20T01:15:38.167194+00:00",
-      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval"
+      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval",
+      "closePrecision": {
+        "kind": "decimal",
+        "places": 2
+      }
     },
     {
       "symbol": "LBRDA",
@@ -285,7 +369,11 @@
       "volume": 176889,
       "sourceUrl": "https://stockanalysis.com/stocks/lbrda/history/",
       "retrievedAt": "2026-10-20T01:15:38.167184+00:00",
-      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval"
+      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval",
+      "closePrecision": {
+        "kind": "decimal",
+        "places": 2
+      }
     },
     {
       "symbol": "LBRDA",
@@ -298,7 +386,11 @@
       "volume": 1900760,
       "sourceUrl": "https://stockanalysis.com/stocks/lbrda/history/",
       "retrievedAt": "2026-10-20T01:15:38.167060+00:00",
-      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval"
+      "basis": "S&P Global historical daily OHLCV via StockAnalysis; split-adjusted; close=adjustedClose for this interval",
+      "closePrecision": {
+        "kind": "decimal",
+        "places": 2
+      }
     },
     {
       "symbol": "FISV",
@@ -308,7 +400,11 @@
       "volume": 6244651,
       "sourceUrl": "https://www.financecharts.com/stocks/FISV/summary/price",
       "retrievedAt": "2026-10-20T01:15:38.265036+00:00",
-      "basis": "Historical daily quote supplied by FinanceCharts; closing price corroborated by broker Trading212; no split or dividend in requested interval; OHLC intentionally omitted because brokerage buying-rate basis differs from consolidated OHLC"
+      "basis": "Historical daily quote supplied by FinanceCharts; closing price corroborated by broker Trading212; no split or dividend in requested interval; OHLC intentionally omitted because brokerage buying-rate basis differs from consolidated OHLC",
+      "closePrecision": {
+        "kind": "decimal",
+        "places": 2
+      }
     }
   ],
   "valuationMarks": [
@@ -411,7 +507,11 @@
       "cashPerShare": 95.0,
       "settlementDate": null,
       "sourceUrl": "https://www.sec.gov/Archives/edgar/data/1666138/000166613826000041/atkr-20261019.htm",
-      "legalSourceSections": ["Item 2.01", "Item 3.01", "Item 3.03"],
+      "legalSourceSections": [
+        "Item 2.01",
+        "Item 3.01",
+        "Item 3.03"
+      ],
       "confirmationSourceUrl": "https://www.emarketstorage.it/sites/default/files/comunicati/2026-10/20261019_190763.pdf",
       "retrievedAt": "2026-10-20",
       "reason": "Prysmian acquisition completed Oct19; each eligible outstanding common share converted to a non-interest-bearing USD95 cash entitlement. NYSE trading halted before open; actual payment date unverified."
@@ -440,7 +540,7 @@
       "reason": "Mandatory one ordinary share per ten ADRs. Provider did not neutralize units; preserve genuine price change after legal exchange."
     }
   ],
-  "policyVersion": "reviewed-market-policy-2026-10-20-v2",
+  "policyVersion": "integrated-reviewed-market-v3",
   "reviewedThrough": "2026-10-16",
   "reconciliation": "Reapply documented evidence to each new primary snapshot; skip already matching provider splits and quotes, reject changed adjustment basis or conflicting source evidence. No automatically guessed marks.",
   "maxHistoricalNavRevision": 0.001

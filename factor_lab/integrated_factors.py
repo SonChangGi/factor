@@ -204,7 +204,14 @@ def factor_registry():
             selectionEligible=d != "research",
             formula=formula,
             minHistory=h,
-            version="1.0.0",
+            version="1.1.0" if i == "CONSISTENCY12_1" else "1.0.0",
+            **(
+                {
+                    "signInputContract": "provider-close-cash-source-interval-v1",
+                    "signInputNotes": "동일 분할 기준 종가·배당으로 상승일을 계산한다. 원자료 정밀도 구간이 0을 포함하면 보합, 정밀도 미확인은 결측으로 처리한다.",
+                }
+                if i == "CONSISTENCY12_1" else {}
+            ),
             unit={
                 "AMIHUD252": "return_per_USD",
                 "LOGADV63": "log_USD_per_session",
@@ -239,6 +246,92 @@ def factor_registry():
 
 def _div(a, b):
     return a / b.replace(0, np.nan)
+
+
+def _quote_interval(values, precision):
+    """Bounds of the source representation, not a return-size tolerance."""
+    values = np.asarray(values, dtype=float)
+    kind = precision.get("kind")
+    if kind == "float32":
+        encoded = values.astype(np.float32)
+        center = encoded.astype(float)
+        lower = (np.nextafter(encoded, np.float32(-np.inf)).astype(float) + center) / 2
+        upper = (np.nextafter(encoded, np.float32(np.inf)).astype(float) + center) / 2
+    elif kind == "decimal":
+        places = precision.get("places")
+        if not isinstance(places, int) or not 0 <= places <= 15:
+            raise ValueError("Decimal quote precision requires places in 0..15")
+        half_tick = 0.5 * 10.0 ** -places
+        lower, upper = values - half_tick, values + half_tick
+    elif kind == "exact":
+        lower, upper = values.copy(), values.copy()
+    else:
+        raise ValueError("Unknown source quote precision")
+    valid = np.isfinite(values) & (values > 0)
+    return np.where(valid, lower, np.nan), np.where(valid, upper, np.nan)
+
+
+def consistency_return_signs(market):
+    """Daily total-return signs at source precision; no adjusted-close fallback.
+
+    Yahoo closes have binary32 encoding; dividends are supplied decimal cash
+    amounts on the same split basis. Explicit custom inputs can declare exact
+    split-adjusted raw closes. Unspecified external quote precision is missing.
+    """
+    source = market.metadata.get("consistencySignSource", {})
+    provider = market.provider_close
+    if provider is None:
+        if source.get("basis") != "split_adjusted_raw_close" or "precision" not in source:
+            return pd.DataFrame(np.nan, index=market.prices.index, columns=market.prices.columns)
+        close = market.raw_close
+        precision = source["precision"]
+    else:
+        close = provider
+        precision = {"kind": "float32"}
+    values = close.to_numpy()
+    # Undo recorded repairs before measuring the original source's encoding.
+    scale = np.ones(values.shape)
+    amendments = market.metadata.get("amendments", [])
+    for row in amendments:
+        if row.get("kind") != "verified_missing_split_normalization":
+            continue
+        symbol, date, ratio = row["symbol"], pd.Timestamp(row["date"]), row["ratio"]
+        if not np.isfinite(ratio) or ratio <= 0:
+            raise ValueError("Invalid recorded split normalization")
+        if symbol in close:
+            scale[close.index < date, close.columns.get_loc(symbol)] /= ratio
+    lower, upper = _quote_interval(values / scale, precision)
+    lower *= scale
+    upper *= scale
+    for row in amendments:
+        if row.get("kind") != "observed_quote":
+            continue
+        symbol, date = row["symbol"], pd.Timestamp(row["date"])
+        if symbol not in close or date not in close.index:
+            continue
+        position = (close.index.get_loc(date), close.columns.get_loc(symbol))
+        quoted_precision = row.get("closePrecision")
+        if quoted_precision is None:
+            lower[position] = upper[position] = np.nan
+        else:
+            # Quote amendments are in the final provider basis, applied after
+            # recorded split repairs by amend_market.
+            lo, hi = _quote_interval(values[position], quoted_precision)
+            lower[position], upper[position] = lo, hi
+    previous_lower = np.roll(lower, 1, axis=0)
+    previous_upper = np.roll(upper, 1, axis=0)
+    previous_lower[0] = previous_upper[0] = np.nan
+    cash = market.dividends.to_numpy()
+    # Enclose binary64 parsing/arithmetic of supplied decimal cash. Zero cash
+    # is exact; an absent cash-action observation must remain unavailable.
+    cash_lower = np.where(cash == 0, 0, np.nextafter(cash, -np.inf))
+    cash_upper = np.where(cash == 0, 0, np.nextafter(cash, np.inf))
+    net_lower = np.nextafter(np.nextafter(lower - previous_upper, -np.inf) + cash_lower, -np.inf)
+    net_upper = np.nextafter(np.nextafter(upper - previous_lower, np.inf) + cash_upper, np.inf)
+    valid = (np.isfinite(net_lower) & np.isfinite(net_upper)
+             & np.isfinite(cash) & (cash >= 0))
+    signs = np.where(net_lower > 0, 1.0, np.where(net_upper < 0, -1.0, 0.0))
+    return pd.DataFrame(np.where(valid, signs, np.nan), index=close.index, columns=close.columns)
 
 
 def _expected_shortfall(frame, window=252, tail_count=26):
@@ -318,7 +411,7 @@ def iter_integrated_factors(market):
         elif id == "ACCEL3_6":
             s = 252 * (lr.rolling(63).mean() - lr.shift(63).rolling(63).mean())
         elif id == "CONSISTENCY12_1":
-            s = formation(r, lambda x: x.gt(0).mean())
+            s = formation(consistency_return_signs(market), lambda x: x.gt(0).mean())
         elif id == "EFFICIENCY12_1":
             s = formation(lr, lambda x: _div(x.sum(), x.abs().sum()))
         elif id == "RANGEPOS126":

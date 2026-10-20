@@ -292,9 +292,13 @@ def validate_automated_result(result, target_as_of=None):
                 checks=['union_universe','version_bindings','cost_inclusive_nav_metrics','drawdown','conserved_holdings_cash_claims','signal_execution_order','current_all_candidates','selection_tie_order','fixed_history','research_completeness'])
 
 
-def write_automated_manifest(candidate, result, source_commit, validation):
+def write_automated_manifest(candidate, result, source_commit, validation, *, publication_type='automated_daily'):
     from .integrated_service import atomic_json
     require(validation.get('status') == 'passed', 'Candidate validation did not pass')
+    require(publication_type in {'automated_daily', 'reviewed_definition_migration'}, 'Unknown publication type')
+    if publication_type == 'reviewed_definition_migration':
+        require(validation.get('definitionReview', {}).get('reviewedDefinitionIds') == ['CONSISTENCY12_1'],
+                'Reviewed migration requires an explicit definition review')
     root = Path(__file__).resolve().parents[1]
     package = Path(__file__).parent.name
     lock = subprocess.check_output(['git', 'show', f'{source_commit}:uv.lock'], cwd=root)
@@ -305,7 +309,7 @@ def write_automated_manifest(candidate, result, source_commit, validation):
     candidate = Path(candidate)
     files = {p.relative_to(candidate).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
              for p in sorted(candidate.rglob('*')) if p.is_file() and p.name != 'publication.json'}
-    manifest = dict(schemaVersion='integrated-publication/v2', status='passed', publicationType='automated_daily',
+    manifest = dict(schemaVersion='integrated-publication/v2', status='passed', publicationType=publication_type,
                     calculationSourceCommit=source_commit, calculationPackage=package,
                     calculationSourceUrl=f'https://github.com/SonChangGi/factor/tree/{source_commit}',
                     resultIdentity=result['resultIdentity'], dataAsOf=result['data']['asOf'],

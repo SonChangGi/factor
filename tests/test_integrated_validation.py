@@ -7,7 +7,9 @@ fixture does not assert that a new daily run or source-proof check occurred.
 from copy import deepcopy
 import json
 from pathlib import Path
+import subprocess
 import pytest
+from factor_lab.integrated_factors import factor_registry as current_factor_registry
 from factor_lab.integrated_validation import (
     validate_automated_result, check_candidates, check_curve, check_weights,
 )
@@ -16,8 +18,11 @@ from factor_lab.integrated_validation import (
 @pytest.fixture(scope='module')
 def historical_fixture():
     root = Path(__file__).resolve().parents[1]
-    result = json.loads((root / 'site/data/integrated-result.json').read_text())
-    histories = json.loads((root / 'site/data/fixed-factor-history.json').read_text())
+    source = '3df7d85c98dd1c42b822ee5a4ff89a274a614e30'
+    def saved(path):
+        return json.loads(subprocess.check_output(['git', 'show', source + ':' + path], cwd=root))
+    result = saved('site/data/integrated-result.json')
+    histories = saved('site/data/fixed-factor-history.json')
     for factor in result['factors']:
         item = histories['factors'][factor['id']]
         if item['latest'] is not None:
@@ -26,6 +31,20 @@ def historical_fixture():
     for stress in result['research']['stress']:
         stress['sourceResultId'] = result['resultIdentity']['resultId']
     return result
+
+
+@pytest.fixture(autouse=True)
+def historical_definition_contract(historical_fixture, monkeypatch):
+    # Mutation checks exercise the frozen release's own catalog. Production
+    # daily validation still requires the current definition version.
+    monkeypatch.setattr('factor_lab.integrated_factors.factor_registry',
+                        lambda: deepcopy(historical_fixture['registry']))
+
+
+def test_current_daily_rejects_a_historical_definition_catalog(historical_fixture, monkeypatch):
+    monkeypatch.setattr('factor_lab.integrated_factors.factor_registry', current_factor_registry)
+    with pytest.raises(ValueError, match='Definition version/catalog changed'):
+        validate_automated_result(historical_fixture)
 
 
 @pytest.fixture

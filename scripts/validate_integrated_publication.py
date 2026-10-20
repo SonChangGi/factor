@@ -14,7 +14,23 @@ ROOT = Path(__file__).resolve().parents[1]
 def validate_daily_publication(site, manifest, result):
     from factor_lab.integrated_validation import validate_automated_result, validate_runtime_lock
     validation = validate_automated_result(result, manifest['dataAsOf'])
-    assert manifest['status'] == 'passed' and manifest['publicationType'] == 'automated_daily'
+    assert manifest['status'] == 'passed' and manifest['publicationType'] in {'automated_daily', 'reviewed_definition_migration'}
+    if manifest['publicationType'] == 'reviewed_definition_migration':
+        contract = manifest['validation']['definitionReview']
+        assert contract['path'] == 'data/definition-review.json'
+        review_bytes = (site / contract['path']).read_bytes()
+        assert hashlib.sha256(review_bytes).hexdigest() == contract['sha256']
+        review = json.loads(review_bytes)
+        assert review['schemaVersion'] == 'factor-definition-review/v1' and review['status'] == 'passed'
+        assert review['resultIdentity'] == result['resultIdentity']
+        assert review['sourceCommit'] == manifest['calculationSourceCommit']
+        assert review['candidateResultId'] == contract['candidateResultId'] == result['resultIdentity']['resultId']
+        assert review['candidateInputHash'] == result['resultIdentity']['inputHash']
+        assert review['baselineResultId'] == contract['baselineResultId']
+        assert review['reviewedDefinitionIds'] == contract['reviewedDefinitionIds'] == ['CONSISTENCY12_1']
+        assert review['definitionBefore']['id'] == 'CONSISTENCY12_1' and review['definitionBefore']['version'] == '1.0.0'
+        assert review['definitionAfter'] == next(r for r in result['registry'] if r['id'] == 'CONSISTENCY12_1')
+        assert review['unchangedDefinitions'] == dict(status='passed', maximumPermittedRelativeNavRevision=.001, nullMasksPreserved=True)
     assert manifest['scheduledIntegratedRefresh'] == 'active'
     assert manifest['resultIdentity'] == result['resultIdentity']
     assert all(manifest['validation'].get(k) == v for k, v in validation.items())
