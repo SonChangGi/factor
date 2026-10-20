@@ -297,3 +297,12 @@ def test_diagnostics_job_cannot_calculate_or_publish():
     assert 'integrated_automation run' not in diagnostics and 'git push' not in diagnostics
     assert 'actions/cache/restore@' in diagnostics and 'fail-on-cache-miss: true' in diagnostics
     assert 'inputs.diagnostics_only != true' in workflow
+
+
+def test_diagnostics_reject_invalid_symbols_and_dates_before_writing(tmp_path):
+    for options in (dict(symbols=['BOH', 'BOH']), dict(symbols=['BOH;id']),
+                    dict(start='2016-01-01', end='2015-12-31'), dict(start='2015-1-1')):
+        output = tmp_path / 'rejected'
+        with pytest.raises(ValueError):
+            automation.export_input_diagnostics(tmp_path / 'absent', output, **options)
+        assert not output.exists()

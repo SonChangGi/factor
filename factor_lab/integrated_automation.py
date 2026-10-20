@@ -9,6 +9,7 @@ from datetime import date, datetime, timedelta, timezone
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -233,19 +234,26 @@ def seed_download_cache(reuse_root, destination, target):
                 sourceCacheKey=os.environ.get('FACTOR_REUSED_INPUT_CACHE_KEY'))
 
 
-def export_input_diagnostics(reuse_root, output):
+def export_input_diagnostics(reuse_root, output, *, symbols=None, start='2015-01-01', end='2016-12-15'):
     """Read a restored cache; never collect, calculate a factor or publish."""
     import pandas as pd
     root, output = Path(reuse_root), Path(output)
     if output.exists():
         raise FileExistsError('Choose a new diagnostics output directory')
+    symbols = symbols or ['CECO','IBOC','UUU','TYL','BOH','GPN','AAP','FISV','PSA','DEA']
+    if not 1 <= len(symbols) <= 30 or len(set(symbols)) != len(symbols) or any(
+        re.fullmatch(r'[A-Z0-9.^-]{1,16}', value) is None for value in symbols
+    ):
+        raise ValueError('Diagnostics require 1..30 distinct canonical symbols')
+    if (str(pd.Timestamp(start).date()) != start or str(pd.Timestamp(end).date()) != end
+            or not pd.Timestamp(start) <= pd.Timestamp(end)):
+        raise ValueError('Diagnostics require an ordered ISO date interval')
     output.mkdir(parents=True)
-    symbols = ['CECO','IBOC','UUU','TYL','BOH','GPN','AAP','FISV','PSA','DEA']
     receipt = dict(schemaVersion='factor-input-diagnostics/v1', sourcePath=str(root),
                    sourceCacheKey=os.environ.get('FACTOR_REUSED_INPUT_CACHE_KEY'),
                    cacheId=os.environ.get('FACTOR_REUSED_INPUT_CACHE_ID'),
                    sourceCommit=current_source(), inputSourceCommit=os.environ.get('FACTOR_REUSED_INPUT_SOURCE_SHA'), symbols=symbols,
-                   start='2015-01-01', end='2016-12-15', files={})
+                   start=start, end=end, files={})
     for stage in ('raw', 'market'):
         folder = root / stage
         manifest_file = folder / 'manifest.json'
@@ -385,6 +393,9 @@ def main(argv=None):
     diagnostics = sub.add_parser('export-input-diagnostics')
     diagnostics.add_argument('--reuse-input-root', type=Path, required=True)
     diagnostics.add_argument('--output', type=Path, required=True)
+    diagnostics.add_argument('--symbols', default='')
+    diagnostics.add_argument('--start', default='2015-01-01')
+    diagnostics.add_argument('--end', default='2016-12-15')
     for name in ('run', 'promote'):
         command = sub.add_parser(name)
         command.add_argument('--workspace', type=Path, required=True)
@@ -401,7 +412,8 @@ def main(argv=None):
     elif args.command == 'confirm-input-cache':
         print(json.dumps(confirm_input_cache(args.workspace, args.cache_key, args.cache_id)))
     elif args.command == 'export-input-diagnostics':
-        print(json.dumps(export_input_diagnostics(args.reuse_input_root, args.output)))
+        print(json.dumps(export_input_diagnostics(args.reuse_input_root, args.output,
+            symbols=args.symbols.split(',') if args.symbols else None, start=args.start, end=args.end)))
     elif args.command == 'run':
         print(json.dumps(run(args.workspace, args.baseline, args.candidate, args.source_commit, reuse_input_root=args.reuse_input_root, archived_input_root=args.archived_input_root)))
     else:

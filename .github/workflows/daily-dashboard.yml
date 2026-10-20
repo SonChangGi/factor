@@ -23,6 +23,21 @@ on:
         required: false
         default: false
         type: boolean
+      diagnostic_symbols:
+        description: Canonical symbols for read-only input inspection (comma separated, maximum 30)
+        required: false
+        default: ''
+        type: string
+      diagnostic_start:
+        description: First inspection date (ISO)
+        required: false
+        default: '2015-01-01'
+        type: string
+      diagnostic_end:
+        description: Last inspection date (ISO)
+        required: false
+        default: '2016-12-15'
+        type: string
   schedule:
     # 07:17 KST Tue-Sat, following completed U.S. weekday sessions.
     - cron: "17 22 * * 1-5"
@@ -363,11 +378,15 @@ jobs:
           FACTOR_REUSED_INPUT_CACHE_KEY: ${{ inputs.reuse_input_cache_key }}
           FACTOR_REUSED_INPUT_CACHE_ID: ${{ steps.reuse.outputs.cache_id }}
           FACTOR_REUSED_INPUT_SOURCE_SHA: ${{ steps.reuse.outputs.source_sha }}
+          DIAGNOSTIC_SYMBOLS: ${{ inputs.diagnostic_symbols }}
+          DIAGNOSTIC_START: ${{ inputs.diagnostic_start }}
+          DIAGNOSTIC_END: ${{ inputs.diagnostic_end }}
         run: |
           set -euo pipefail
           [[ -n "${REUSE_ROOT}" ]] || { echo "Diagnostics require an explicit immutable input cache key." >&2; exit 1; }
           python -m factor_lab.integrated_automation export-input-diagnostics \
-            --reuse-input-root "${REUSE_ROOT}" --output outputs/input-diagnostics
+            --reuse-input-root "${REUSE_ROOT}" --output outputs/input-diagnostics \
+            --symbols "${DIAGNOSTIC_SYMBOLS}" --start "${DIAGNOSTIC_START}" --end "${DIAGNOSTIC_END}"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: factor-input-diagnostics-${{ github.run_id }}
