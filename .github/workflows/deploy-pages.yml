@@ -116,7 +116,7 @@ jobs:
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip
-          python -m pip install -e '.[dev]'
+          python -m pip install -e '.[dev,live]'
           python -m pytest -q \
             tests/test_actions_pinning.py \
             tests/test_actions_outcome.py \
