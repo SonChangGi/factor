@@ -417,8 +417,13 @@ class BacktestResult:
     target_max_weights: pd.Series = field(default_factory=pd.Series)
     policy_input_statuses: pd.Series = field(default_factory=pd.Series)
     policy_input_reasons: pd.Series = field(default_factory=pd.Series)
+    security_contributions: pd.DataFrame = field(default_factory=pd.DataFrame)
     ending_weights: pd.Series = field(default_factory=pd.Series)
+    # cash_weights includes liquid cash plus corporate cash receivables;
+    # receivable_weights exposes the non-spendable subset separately.
+    receivable_weights: pd.Series = field(default_factory=pd.Series)
     ending_cash_weight: float = 1.0
+    ending_receivable_weight: float = 0.0
     last_execution_date: pd.Timestamp | None = None
     last_signal_date: pd.Timestamp | None = None
     first_nonempty_execution_date: pd.Timestamp | None = None
@@ -481,6 +486,11 @@ def run_factor_backtest(
     trailing_market_cap: pd.DataFrame | None = None,
     retain_weight_history: bool = True,
     weight_history_tail_sessions: int | None = None,
+    signal_targets: dict[pd.Timestamp, TargetAllocation] | None = None,
+    execution_delay_sessions: int = 1,
+    valuation_prices: pd.DataFrame | None = None,
+    corporate_actions: tuple[dict, ...] | list[dict] = (),
+    retain_contribution_history: bool = False,
 ) -> BacktestResult:
     """Backtest a date-t close signal with next-session-close execution.
 
@@ -496,8 +506,28 @@ def run_factor_backtest(
     when an existing holding cannot be valued; an unpriceable new target is
     omitted while the remaining target can still be implemented.  The
     unavailable intraday execution return is never approximated.
+
+    Optional valuation marks may fill a verified no-trade close but never
+    become executable quotes. Corporate actions exchange total-return price
+    units at the start of their effective session, without a discretionary
+    trade or cost. Each action supplies ``date``, ``symbol``, ``targetSymbol``,
+    ``unitRatio`` and optional ``cashPerUnit``; these are normalized price-unit
+    quantities, not raw share ratios. The input layer must derive them from
+    source/target price bases available at the event. Event-session economic
+    gains remain attributed to the predecessor sleeve, while pre-trade and
+    ending holdings reflect the received security. A cash-only action has
+    ``targetSymbol=None``, ``unitRatio=0`` and positive ``cashPerUnit``. Its
+    consideration is a non-interest-bearing cash receivable until an explicit
+    ``settlementDate``; unknown settlement never becomes spendable cash. A
+    stock-plus-cash action preserves immediate paid cash when settlementDate
+    is omitted, while an explicit None or future date creates a receivable.
+    Cash weights include both liquid cash and receivables; the separately
+    exposed receivable weights identify the unavailable part. Rebalances wait
+    while any corporate cash receivable remains unsettled.
     """
 
+    if not isinstance(execution_delay_sessions, int) or execution_delay_sessions < 1:
+        raise ValueError("execution_delay_sessions must be a positive integer")
     if weight_history_tail_sessions is not None:
         if (
             not retain_weight_history
@@ -538,6 +568,51 @@ def run_factor_backtest(
     dates = pd.DatetimeIndex(prices.index)
     columns = pd.Index(common_columns)
     price_values = prices.to_numpy(dtype=float, copy=False)
+    if valuation_prices is not None:
+        if not valuation_prices.index.equals(dates) or not columns.isin(valuation_prices.columns).all():
+            raise ValueError("valuation_prices must share the exact dates and cover price columns")
+        mark_values = valuation_prices.reindex(columns=columns).to_numpy(dtype=float, copy=False)
+        observed = np.isfinite(price_values) & (price_values > 0.0)
+        if not np.allclose(mark_values[observed], price_values[observed], rtol=1e-12, atol=0):
+            raise ValueError("valuation_prices must preserve all observed execution quotes")
+        if np.isinf(mark_values).any() or (mark_values[np.isfinite(mark_values)] < 0).any():
+            raise ValueError("valuation_prices contains invalid marks")
+    else:
+        mark_values = price_values
+    actions_by_date: dict[
+        pd.Timestamp, list[tuple[int, int | None, float, float, pd.Timestamp | None, bool]]
+    ] = {}
+    action_keys = set()
+    for action in corporate_actions:
+        date = pd.Timestamp(action["date"])
+        source = str(action["symbol"])
+        target = action["targetSymbol"]
+        target = str(target) if target is not None else None
+        ratio = float(action["unitRatio"])
+        cash_per_unit = float(action.get("cashPerUnit", 0.0))
+        if source not in columns or (target is not None and (target not in columns or source == target)):
+            raise ValueError("corporate action requires source and distinct target price columns")
+        if not np.isfinite(ratio) or not np.isfinite(cash_per_unit) or cash_per_unit < 0:
+            raise ValueError("corporate action has invalid unit ratio or cash consideration")
+        if (target is None and (ratio != 0 or cash_per_unit <= 0)) or (target is not None and ratio <= 0):
+            raise ValueError("cash-only action requires zero ratio and positive cash consideration")
+        settlement = action.get("settlementDate")
+        settlement = pd.Timestamp(settlement) if settlement is not None else None
+        if settlement is not None and (pd.isna(settlement) or settlement < date):
+            raise ValueError("corporate cash settlement cannot precede the effective date")
+        defer_cash = target is None or "settlementDate" in action
+        key = (date, source)
+        if key in action_keys:
+            raise ValueError("duplicate corporate action for source and date")
+        action_keys.add(key)
+        if date < dates[0] or date > dates[-1]:
+            continue
+        if date not in dates:
+            raise ValueError("corporate action effective date must be an observed session")
+        actions_by_date.setdefault(date, []).append(
+            (columns.get_loc(source), columns.get_loc(target) if target is not None else None,
+             ratio, cash_per_unit, settlement, defer_cash)
+        )
 
     target_by_date: dict[pd.Timestamp, np.ndarray] = {}
     allocation_by_date: dict[pd.Timestamp, TargetAllocation] = {}
@@ -547,12 +622,13 @@ def run_factor_backtest(
     eligible_by_date: dict[pd.Timestamp, int] = {}
     selected_by_date: dict[pd.Timestamp, int] = {}
     position_by_date = {date: position for position, date in enumerate(dates)}
-    for signal_date in _rebalance_dates(dates, config.rebalance_frequency):
+    signal_schedule = sorted(signal_targets) if signal_targets is not None else _rebalance_dates(dates, config.rebalance_frequency)
+    for signal_date in signal_schedule:
         position = position_by_date[pd.Timestamp(signal_date)]
-        if position + 1 >= len(dates):
+        if position + execution_delay_sessions >= len(dates):
             continue
-        execution_date = pd.Timestamp(dates[position + 1])
-        allocation = _target_for_signal(
+        execution_date = pd.Timestamp(dates[position + execution_delay_sessions])
+        allocation = signal_targets[signal_date] if signal_targets is not None else _target_for_signal(
             policy_id,
             pd.Timestamp(signal_date),
             scores.loc[signal_date],
@@ -573,8 +649,11 @@ def run_factor_backtest(
         # factor evidence and can falsely satisfy the minimum-history gate.
         policy_status_by_date[execution_date] = allocation.status
         policy_reasons_by_date[execution_date] = tuple(allocation.reasons)
-        if allocation.status == "available" and allocation.selected_security_count > 0:
-            target_by_date[execution_date] = allocation.weights(columns).to_numpy(dtype=float)
+        if allocation.status == "available" and (allocation.selected_security_count > 0 or signal_targets is not None):
+            target_weights = allocation.weights(columns).to_numpy(dtype=float)
+            if not np.isfinite(target_weights).all() or (target_weights < 0).any() or target_weights.sum() > 1.0 + 1e-10:
+                raise ValueError("invalid explicit target weights")
+            target_by_date[execution_date] = target_weights
             allocation_by_date[execution_date] = allocation
             signal_by_date[execution_date] = pd.Timestamp(signal_date)
             eligible_by_date[execution_date] = allocation.eligible_security_count
@@ -585,9 +664,15 @@ def run_factor_backtest(
     # arbitrary (one research currency unit at inception) but internally exact.
     shares = np.zeros(len(columns), dtype=float)
     cash_value = 1.0
+    cash_receivables: list[tuple[pd.Timestamp | None, float]] = []
+    # Sparse ancestry survives incomplete closes, so an exchange during a quote
+    # gap still reconciles to the last complete predecessor-sleeve NAV.
+    attribution_transfers: dict[tuple[int, int], float] = {}
+    attribution_cash: dict[int, float] = {}
     last_complete_nav = 1.0
     last_complete_weights = np.zeros(len(columns), dtype=float)
     last_complete_cash_weight = 1.0
+    last_complete_receivable_weight = 0.0
     last_complete_date: pd.Timestamp | None = None
     strategy_started = False
     first_nonempty_execution_date: pd.Timestamp | None = None
@@ -611,6 +696,12 @@ def run_factor_backtest(
         if weight_history_tail_sessions is not None
         else []
     )
+    receivable_values: list[float] | deque[float] = (
+        deque(maxlen=weight_history_tail_sessions)
+        if weight_history_tail_sessions is not None
+        else []
+    )
+    security_contribution_rows: list[np.ndarray] = []
     return_values: list[float] = []
     turnover_values: list[float] = []
     cost_values: list[float] = []
@@ -649,6 +740,7 @@ def run_factor_backtest(
         if retain_weight_history:
             weight_rows.append(start_weights)
             cash_values.append(start_cash_weight)
+            receivable_values.append(float(last_complete_receivable_weight))
         start_exposure = float(start_weights.sum())
         exposure_values.append(start_exposure)
         if (
@@ -662,23 +754,64 @@ def run_factor_backtest(
         # first supplied close.
         if position > 0:
             cash_value *= 1.0 + daily_cash_return
-        pretrade_cash_value = float(cash_value)
+        # Settlement changes liquidity, never NAV. Only liquid cash earns
+        # the close-to-close cash return above; a legal claim earns none.
+        remaining_receivables = []
+        for settlement, amount in cash_receivables:
+            if settlement is not None and settlement <= date:
+                cash_value += amount
+            else:
+                remaining_receivables.append((settlement, amount))
+        cash_receivables = remaining_receivables
+        for source, target, ratio, cash_per_unit, settlement, defer_cash in actions_by_date.get(date, ()):
+            source_units = float(shares[source])
+            if source_units <= 1e-15:
+                continue
+            inherited_units = 0.0
+            for (origin, destination), units in list(attribution_transfers.items()):
+                if destination != source:
+                    continue
+                inherited_units += units
+                del attribution_transfers[origin, destination]
+                if target is not None:
+                    target_key = (origin, target)
+                    attribution_transfers[target_key] = attribution_transfers.get(target_key, 0.0) + units * ratio
+                attribution_cash[origin] = attribution_cash.get(origin, 0.0) + units * cash_per_unit
+            native_units = max(0.0, source_units - inherited_units)
+            if native_units > 0:
+                if target is not None:
+                    target_key = (source, target)
+                    attribution_transfers[target_key] = attribution_transfers.get(target_key, 0.0) + native_units * ratio
+                attribution_cash[source] = attribution_cash.get(source, 0.0) + native_units * cash_per_unit
+            shares[source] = 0.0
+            if target is not None:
+                shares[target] += source_units * ratio
+            consideration = source_units * cash_per_unit
+            if consideration > 0:
+                if defer_cash and (settlement is None or settlement > date):
+                    cash_receivables.append((settlement, consideration))
+                else:
+                    cash_value += consideration
+        receivable_value = float(sum(amount for _, amount in cash_receivables))
+        pretrade_cash_value = float(cash_value + receivable_value)
 
         execution_prices = price_values[position]
+        valuation_marks = mark_values[position]
         held = shares > 1e-15
         stale_held = held & (~np.isfinite(execution_prices) | (execution_prices <= 0.0))
-        valuation_complete = not bool(stale_held.any())
+        unvalued_held = held & (~np.isfinite(valuation_marks) | (valuation_marks <= 0.0))
+        valuation_complete = not bool(unvalued_held.any())
         valuation_values.append(valuation_complete)
         stale_count_values.append(int(stale_held.sum()))
         stale_weight_values.append(float(start_weights[stale_held].sum()))
 
         if valuation_complete:
-            sleeve_values = shares * np.where(np.isfinite(execution_prices), execution_prices, 0.0)
-            pretrade_nav = float(sleeve_values.sum() + cash_value)
+            sleeve_values = shares * np.where(np.isfinite(valuation_marks), valuation_marks, 0.0)
+            pretrade_nav = float(sleeve_values.sum() + pretrade_cash_value)
             if not np.isfinite(pretrade_nav) or pretrade_nav <= 0.0:
                 raise ValueError(f"portfolio NAV is non-positive or non-finite on {date.date()}")
             pretrade = sleeve_values / pretrade_nav
-            pretrade_cash = float(cash_value / pretrade_nav)
+            pretrade_cash = float(pretrade_cash_value / pretrade_nav)
         else:
             pretrade_nav = float("nan")
             pretrade = last_complete_weights.copy()
@@ -726,12 +859,17 @@ def run_factor_backtest(
             target_top1_diagnostic = float(sorted_target[:1].sum())
             target_top5_diagnostic = float(sorted_target[:5].sum())
             target_max_diagnostic = float(sorted_target.max()) if sorted_target.size else 0.0
-            if not valuation_complete:
-                # Trading from an unknown held NAV would assume an unobserved
-                # sale price and corrupt both turnover and the sleeve state.
+            if not valuation_complete or bool(stale_held.any()):
+                # A valuation mark is not an executable sale quote. Preserve
+                # both turnover and share sleeves until actual quotes return.
                 execution_status = "blocked_missing_held_quote"
                 selected_by_date[date] = int(held.sum())
-            elif not bool((executable_target > 0.0).any()):
+            elif receivable_value > 0.0:
+                # A compulsory cash entitlement is valued at its legal amount,
+                # but cannot fund a rebalance before confirmed settlement.
+                execution_status = "blocked_unsettled_corporate_cash"
+                selected_by_date[date] = int(held.sum())
+            elif not bool((executable_target > 0.0).any()) and bool((target > 0.0).any()):
                 # Do not liquidate a valid research portfolio merely because
                 # every proposed new close is absent.
                 execution_status = "blocked_all_targets_unpriceable"
@@ -757,6 +895,7 @@ def run_factor_backtest(
                 last_complete_nav = float(post_cost_nav)
                 last_complete_weights = executable_target.copy()
                 last_complete_cash_weight = float(target_cash)
+                last_complete_receivable_weight = 0.0
                 cost = (
                     float(cost_notional / anchor_nav)
                     if strategy_started
@@ -770,6 +909,7 @@ def run_factor_backtest(
                 if not strategy_started:
                     strategy_started = True
                     successful_entry = True
+                if first_nonempty_execution_date is None and bool((executable_target > 0).any()):
                     first_nonempty_execution_date = pd.Timestamp(date)
                 last_execution_date = pd.Timestamp(date)
                 last_signal_date = allocation.signal_date
@@ -780,6 +920,7 @@ def run_factor_backtest(
             last_complete_nav = float(pretrade_nav)
             last_complete_weights = pretrade.copy()
             last_complete_cash_weight = float(pretrade_cash)
+            last_complete_receivable_weight = float(receivable_value / pretrade_nav)
 
         if successful_entry:
             # The entry close is the first strategy observation.  It contains
@@ -800,8 +941,11 @@ def run_factor_backtest(
             return_interval_sessions = sessions_since_complete_return + 1
             sessions_since_complete_return = 0
 
+        contribution_row = np.zeros(len(columns), dtype=float) if retain_contribution_history else None
+        if strategy_started and not np.isfinite(portfolio_return) and contribution_row is not None:
+            contribution_row[start_weights > 1e-15] = np.nan
         if (
-            position >= evaluation_start_position
+            (position >= evaluation_start_position or retain_contribution_history)
             and strategy_started
             and np.isfinite(portfolio_return)
         ):
@@ -815,33 +959,49 @@ def run_factor_backtest(
                 held_positions = np.flatnonzero(start_weights > 1e-15)
                 contribution_start_weights = start_weights[held_positions]
                 starting_sleeve_values = contribution_start_weights * anchor_nav
+                attributed_values = sleeve_values.copy()
+                for (origin, destination), units in attribution_transfers.items():
+                    received_value = units * valuation_marks[destination]
+                    attributed_values[destination] -= received_value
+                    attributed_values[origin] += received_value
+                for origin, cash_received in attribution_cash.items():
+                    attributed_values[origin] += cash_received
                 security_contributions = (
-                    sleeve_values[held_positions] / anchor_nav - contribution_start_weights
+                    attributed_values[held_positions] / anchor_nav - contribution_start_weights
                 )
                 security_returns = (
                     np.divide(
-                        sleeve_values[held_positions],
+                        attributed_values[held_positions],
                         starting_sleeve_values,
                         out=np.zeros_like(security_contributions),
                         where=starting_sleeve_values > 0.0,
                     )
                     - 1.0
                 )
-                cash_contribution = float(pretrade_cash_value / anchor_nav - start_cash_weight)
-            contribution_accumulator.observe(
-                date=pd.Timestamp(date),
-                interval_start=interval_start,
-                return_interval_sessions=return_interval_sessions,
-                portfolio_return=portfolio_return,
-                held_positions=held_positions,
-                security_contributions=security_contributions,
-                start_weights=contribution_start_weights,
-                security_returns=security_returns,
-                cash_contribution=cash_contribution,
-                cost_contribution=-float(cost),
-            )
+                cash_contribution = float(
+                    (pretrade_cash_value - sum(attribution_cash.values())) / anchor_nav - start_cash_weight
+                )
+            if contribution_row is not None:
+                contribution_row[held_positions] = security_contributions
+            if position >= evaluation_start_position:
+                contribution_accumulator.observe(
+                    date=pd.Timestamp(date),
+                    interval_start=interval_start,
+                    return_interval_sessions=return_interval_sessions,
+                    portfolio_return=portfolio_return,
+                    held_positions=held_positions,
+                    security_contributions=security_contributions,
+                    start_weights=contribution_start_weights,
+                    security_returns=security_returns,
+                    cash_contribution=cash_contribution,
+                    cost_contribution=-float(cost),
+                )
+        if contribution_row is not None:
+            security_contribution_rows.append(contribution_row)
         if valuation_complete:
             last_complete_date = pd.Timestamp(date)
+            attribution_transfers.clear()
+            attribution_cash.clear()
         return_values.append(portfolio_return)
         turnover_values.append(turnover)
         cost_values.append(cost)
@@ -969,8 +1129,17 @@ def run_factor_backtest(
         target_max_weights=target_max_weights,
         policy_input_statuses=policy_input_statuses,
         policy_input_reasons=policy_input_reasons,
+        security_contributions=(
+            pd.DataFrame(security_contribution_rows, index=dates, columns=columns)
+            if retain_contribution_history else pd.DataFrame(columns=columns, dtype=float)
+        ),
         ending_weights=pd.Series(last_complete_weights, index=columns, dtype=float),
+        receivable_weights=(
+            pd.Series(receivable_values, index=retained_dates, name="receivable_weight", dtype=float)
+            if retain_weight_history else pd.Series(name="receivable_weight", dtype=float)
+        ),
         ending_cash_weight=float(last_complete_cash_weight),
+        ending_receivable_weight=float(last_complete_receivable_weight),
         last_execution_date=last_execution_date,
         last_signal_date=last_signal_date,
         first_nonempty_execution_date=first_nonempty_execution_date,
