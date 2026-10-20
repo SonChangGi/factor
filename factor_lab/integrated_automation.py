@@ -273,7 +273,7 @@ def export_input_diagnostics(reuse_root, output):
     return receipt
 
 
-def run(workspace, baseline, candidate, source_commit, *, now=None, reuse_input_root=None):
+def run(workspace, baseline, candidate, source_commit, *, now=None, reuse_input_root=None, archived_input_root=None):
     from .integrated_data import collect_integrated_market, save_integrated_market
     from .integrated_service import atomic_json, execute_run, build_site, code_fingerprint
     from .integrated_validation import validate_automated_result, write_automated_manifest
@@ -299,7 +299,7 @@ def run(workspace, baseline, candidate, source_commit, *, now=None, reuse_input_
             atomic_json(workspace / 'status.json', status)
         baseline_payload = json.loads((baseline / 'data/integrated-result.json').read_text())
         reference = coverage_contract_from_result(baseline_payload)
-        raw = collect_integrated_market(workspace / 'raw', '2010-01-01', end, reference_coverage=reference)
+        raw = collect_integrated_market(workspace / 'raw', '2010-01-01', end, reference_coverage=reference, archived_input_root=archived_input_root)
         if raw.metadata['dataAsOf'] != target:
             raise ValueError('Provider has not supplied the completed target session')
         policy = json.loads(POLICY.read_text())
@@ -393,6 +393,7 @@ def main(argv=None):
         if name == 'run':
             command.add_argument('--source-commit', required=True)
             command.add_argument('--reuse-input-root', type=Path)
+            command.add_argument('--archived-input-root', type=Path)
     args = parser.parse_args(argv)
     if args.command == 'freshness':
         for key, value in freshness(args.site, args.event_name).items():
@@ -402,7 +403,7 @@ def main(argv=None):
     elif args.command == 'export-input-diagnostics':
         print(json.dumps(export_input_diagnostics(args.reuse_input_root, args.output)))
     elif args.command == 'run':
-        print(json.dumps(run(args.workspace, args.baseline, args.candidate, args.source_commit, reuse_input_root=args.reuse_input_root)))
+        print(json.dumps(run(args.workspace, args.baseline, args.candidate, args.source_commit, reuse_input_root=args.reuse_input_root, archived_input_root=args.archived_input_root)))
     else:
         print(json.dumps(promote(args.workspace, args.baseline, args.candidate)))
     return 0

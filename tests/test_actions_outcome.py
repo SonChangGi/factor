@@ -34,3 +34,17 @@ def test_workflow_never_treats_page_reachability_as_a_successful_refresh(overrid
                    "DEPLOY_RESULT": "success", "SHOULD_DEPLOY": "true", **override}
     result = subprocess.run(["bash", "-e", "-c", script], env=environment, capture_output=True)
     assert result.returncode == expected, result.stdout + result.stderr
+
+
+def test_fresh_publication_skips_all_input_cache_resolution_and_restore():
+    workflow = Path(".github/workflows/daily-dashboard.yml").read_text()
+    update = workflow.split("  update-dashboard:\n", 1)[1].split("  deploy-pages:\n", 1)[0]
+    for name in ("Resolve the explicitly requested immutable input cache",
+                 "Resolve the previous verified primary input vintage"):
+        step = update.split("      - name: " + name + "\n", 1)[1].split("      - name: ", 1)[0]
+        assert "if: steps.freshness.outputs.skip != 'true'" in step
+    # The actions cannot restore if their guarded resolver did not set enabled.
+    for name, resolver in (("Restore the exact input cache without collection", "reuse"),
+                           ("Restore previous primary input vintage for guarded history preservation", "archive")):
+        step = update.split("      - name: " + name + "\n", 1)[1].split("      - name: ", 1)[0]
+        assert f"if: steps.{resolver}.outputs.enabled == 'true'" in step

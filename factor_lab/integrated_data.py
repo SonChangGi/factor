@@ -332,7 +332,7 @@ def history_coverage_issue(data, symbol, reference):
 
 
 def collect_integrated_market(output_dir: Path, start="2010-01-01", end=None, symbols=None,
-                              *, reference_coverage=None):
+                              *, reference_coverage=None, archived_input_root=None):
     """Download in bounded batches; a finished snapshot is never overwritten.
 
     Failed symbols remain explicit missing columns. No synthetic prices or
@@ -401,6 +401,7 @@ def collect_integrated_market(output_dir: Path, start="2010-01-01", end=None, sy
     collected = {k: {} for k in mapping}
     failures = {}
     receipts = []
+    archive_symbols = set()
     for offset in range(0, len(all_symbols), 25):
         batch = all_symbols[offset : offset + 25]
         key = hashlib.sha256(json.dumps(batch).encode()).hexdigest()[:16]
@@ -510,6 +511,9 @@ def collect_integrated_market(output_dir: Path, start="2010-01-01", end=None, sy
                     if issue:
                         failure = dict(symbol=symbol, issue=issue, error=failures.get(symbol))
                         (root / 'history-coverage-failure.json').write_text(json.dumps(failure, indent=2)+'\n')
+                        if archived_input_root is not None:
+                            archive_symbols.add(symbol)
+                            continue
                         raise ValueError(f'Truncated historical input remains after bounded retry: {symbol}')
                     continue
                 failures.pop(symbol, None)
@@ -542,6 +546,16 @@ def collect_integrated_market(output_dir: Path, start="2010-01-01", end=None, sy
     good = frames["volumes"].gt(0)
     for k in ("prices", "raw_close", "raw_open", "raw_high", "raw_low"):
         frames[k] = frames[k].where(good)
+    # A wholly failed batch must not bypass the same historical contract.
+    for symbol in requested:
+        paired = pd.DataFrame({('Adj Close', symbol): frames['prices'][symbol],
+                               ('Volume', symbol): frames['volumes'][symbol]})
+        issue = history_coverage_issue(paired, symbol, reference_coverage)
+        if issue and symbol not in archive_symbols:
+            if archived_input_root is None:
+                (root / 'history-coverage-failure.json').write_text(json.dumps(dict(symbol=symbol, issue=issue), indent=2)+'\n')
+                raise ValueError(f'Historical input coverage incomplete: {symbol}')
+            archive_symbols.add(symbol)
     frames["eligibility"] = compute_eligibility(
         frames["prices"], frames["raw_close"], frames["volumes"], requested
     )
@@ -584,4 +598,15 @@ def collect_integrated_market(output_dir: Path, start="2010-01-01", end=None, sy
         frame = getattr(market, name)
         if frame is not None:
             setattr(market, name, frame.loc[output_calendar])
+    if archive_symbols:
+        from .integrated_archive import load_archived_columns, preserve_archived_columns
+        archive = load_archived_columns(Path(archived_input_root) / 'raw', archive_symbols)
+        market = preserve_archived_columns(market, archive, archive_symbols, reference_coverage)
+        market.eligibility = compute_eligibility(market.prices, market.raw_close, market.volumes, requested)
+    market.metadata['inputCoverage'] = {symbol: {
+        **positive_volume_coverage(pd.DataFrame({('Adj Close', symbol): market.prices[symbol],
+                                                ('Volume', symbol): market.volumes[symbol]}),
+                                   symbol, str(output_calendar[-1].date())),
+        'asOf': str(output_calendar[-1].date()),
+        'basis': 'positive_adjusted_close_and_positive_provider_volume'} for symbol in requested}
     return save_integrated_market(apply_market_quality(market), root)

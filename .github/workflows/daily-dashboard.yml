@@ -13,6 +13,11 @@ on:
         required: false
         default: ''
         type: string
+      archived_input_cache_key:
+        description: Initial verified raw vintage cache; normally resolved from last-good data
+        required: false
+        default: ''
+        type: string
       diagnostics_only:
         description: Read restored inputs only; never collect, calculate, commit or deploy
         required: false
@@ -103,6 +108,7 @@ jobs:
             --site site --event-name "${event}" >> "$GITHUB_OUTPUT"
       - name: Resolve the explicitly requested immutable input cache
         id: reuse
+        if: steps.freshness.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           CACHE_KEY: ${{ inputs.reuse_input_cache_key }}
@@ -132,6 +138,39 @@ jobs:
           path: |
             ${{ steps.reuse.outputs.path }}/raw
             ${{ steps.reuse.outputs.path }}/market
+      - name: Resolve the previous verified primary input vintage
+        id: archive
+        if: steps.freshness.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED_ARCHIVE_KEY: ${{ inputs.archived_input_cache_key }}
+        run: |
+          set -euo pipefail
+          cache_key="${REQUESTED_ARCHIVE_KEY}"
+          if [[ -z "${cache_key}" ]]; then
+            cache_key="$(python -c 'import json; print(json.load(open("site/data/integrated-result.json"))["data"].get("inputCache", {}).get("key", ""))')"
+          fi
+          if [[ -z "${cache_key}" ]]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          [[ "${cache_key}" =~ ^factor-input-v1-([0-9]+)-([0-9]+)$ ]] || { echo "Invalid archived input cache key." >&2; exit 1; }
+          run_id="${BASH_REMATCH[1]}"
+          attempt="${BASH_REMATCH[2]}"
+          cache_id="$(gh api "repos/${GITHUB_REPOSITORY}/actions/caches?key=${cache_key}" --jq ".actions_caches[] | select(.key == \"${cache_key}\") | .id" | head -n 1)"
+          [[ "${cache_id}" =~ ^[0-9]+$ ]] || { echo "Last-good raw vintage was evicted; explicit recovery is required." >&2; exit 1; }
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
+          echo "key=${cache_key}" >> "$GITHUB_OUTPUT"
+          echo "path=outputs/factor-daily/${run_id}-${attempt}" >> "$GITHUB_OUTPUT"
+      - name: Restore previous primary input vintage for guarded history preservation
+        if: steps.archive.outputs.enabled == 'true'
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25
+        with:
+          key: ${{ steps.archive.outputs.key }}
+          fail-on-cache-miss: true
+          path: |
+            ${{ steps.archive.outputs.path }}/raw
+            ${{ steps.archive.outputs.path }}/market
       - name: Collect, reconcile, calculate and validate the candidate
         id: calculate
         if: steps.freshness.outputs.skip != 'true'
@@ -139,11 +178,14 @@ jobs:
           SOURCE_SHA: ${{ steps.source.outputs.sha }}
           FACTOR_INPUT_CACHE_KEY: factor-input-v1-${{ github.run_id }}-${{ github.run_attempt }}
           REUSE_ROOT: ${{ steps.reuse.outputs.path }}
+          ARCHIVE_ROOT: ${{ steps.archive.outputs.path }}
+          FACTOR_ARCHIVED_INPUT_CACHE_KEY: ${{ steps.archive.outputs.key }}
           FACTOR_REUSED_INPUT_CACHE_KEY: ${{ inputs.reuse_input_cache_key }}
         run: |
           set -euo pipefail
           reuse_args=()
           [[ -z "${REUSE_ROOT}" ]] || reuse_args+=(--reuse-input-root "${REUSE_ROOT}")
+          [[ -z "${ARCHIVE_ROOT}" ]] || reuse_args+=(--archived-input-root "${ARCHIVE_ROOT}")
           python -m factor_lab.integrated_automation run \
             --workspace "outputs/factor-daily/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
             --baseline site --candidate outputs/factor-candidate --source-commit "${SOURCE_SHA}" "${reuse_args[@]}"

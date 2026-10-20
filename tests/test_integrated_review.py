@@ -1,9 +1,11 @@
 import copy
+import json
 
 import pytest
 
 from factor_lab.integrated_factors import factor_registry
 from factor_lab.integrated_review import reviewed_revision
+from factor_lab import integrated_review
 
 
 def revisions():
@@ -61,3 +63,23 @@ def test_review_cannot_expand_definition_or_portfolio_scope(edit):
     edit(candidate)
     with pytest.raises(ValueError):
         reviewed_revision(baseline, candidate)
+
+
+def test_review_cannot_publish_when_primary_input_cache_is_unavailable(tmp_path, monkeypatch):
+    baseline = tmp_path / 'baseline'
+    (baseline / 'data').mkdir(parents=True)
+    original = json.dumps(dict(resultIdentity=dict(resultId='old')))
+    (baseline / 'data/integrated-result.json').write_text(original)
+    candidate_result = tmp_path / 'result.json'
+    candidate_result.write_text(json.dumps(dict(
+        resultIdentity=dict(inputHash='input', codeHash='code'),
+        data=dict(inputCache=dict(key='factor-input-v1-123-1')))))
+    monkeypatch.setattr(integrated_review, 'current_source', lambda: 'source')
+    monkeypatch.setattr(integrated_review, 'code_fingerprint', lambda: ('code', {}))
+    monkeypatch.setattr(integrated_review.subprocess, 'check_output',
+                        lambda *args, **kwargs: '{"actions_caches":[]}')
+    candidate = tmp_path / 'candidate'
+    with pytest.raises(ValueError, match='input cache is unavailable'):
+        integrated_review.prepare(candidate_result, baseline, candidate, 'source', 'old', 'input', '456')
+    assert not candidate.exists()
+    assert (baseline / 'data/integrated-result.json').read_text() == original

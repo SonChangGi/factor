@@ -34,7 +34,7 @@ def code_fingerprint():
              'integrated_research.py', 'integrated_service.py', 'backtest.py',
              'portfolio.py', 'metrics.py', 'config.py', 'integrated_variants.py',
              'integrated_legacy_best.py', 'integrated_repairs.py', 'integrated_history.py',
-             'integrated_automation.py', 'integrated_validation.py',
+             'integrated_automation.py', 'integrated_validation.py', 'integrated_archive.py',
              'resources/integrated_market_policy.json', 'factors.py',
              'advanced_factors.py', 'universe.py', 'resources/integrated_legacy_map.json',
              'resources/integrated_universe.json')
