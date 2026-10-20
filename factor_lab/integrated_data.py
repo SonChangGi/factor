@@ -307,7 +307,32 @@ def apply_market_quality(market: IntegratedMarket) -> IntegratedMarket:
     return market
 
 
-def collect_integrated_market(output_dir: Path, start="2010-01-01", end=None, symbols=None):
+def positive_volume_coverage(data, symbol, asof=None):
+    """Coverage of paired provider observations, never a reconstructed fill."""
+    if ('Adj Close', symbol) not in data or ('Volume', symbol) not in data:
+        return dict(observations=0, firstObservation=None)
+    valid = data[('Adj Close', symbol)].gt(0) & data[('Volume', symbol)].gt(0)
+    if asof is not None:
+        valid &= data.index <= pd.Timestamp(asof)
+    observed = data.index[valid]
+    return dict(observations=int(valid.sum()),
+                firstObservation=str(observed[0].date()) if len(observed) else None)
+
+
+def history_coverage_issue(data, symbol, reference):
+    expected = reference.get(symbol)
+    if not expected or expected['observations'] == 0:
+        return None
+    observed = positive_volume_coverage(data, symbol, expected['asOf'])
+    if (observed['observations'] < expected['observations'] or
+            observed['firstObservation'] is None or
+            observed['firstObservation'] > expected['firstObservation']):
+        return dict(reason='truncated_positive_volume_history', expected=expected, observed=observed)
+    return None
+
+
+def collect_integrated_market(output_dir: Path, start="2010-01-01", end=None, symbols=None,
+                              *, reference_coverage=None):
     """Download in bounded batches; a finished snapshot is never overwritten.
 
     Failed symbols remain explicit missing columns. No synthetic prices or
@@ -316,6 +341,7 @@ def collect_integrated_market(output_dir: Path, start="2010-01-01", end=None, sy
     """
     import yfinance as yf
 
+    reference_coverage = reference_coverage or {}
     root = Path(output_dir)
     if (root / "manifest.json").exists():
         existing = load_integrated_market(root)
@@ -331,6 +357,11 @@ def collect_integrated_market(output_dir: Path, start="2010-01-01", end=None, sy
         )
         if previous.get("symbols") != expected:
             raise ValueError("Immutable snapshot belongs to a different universe request")
+        for symbol, expected in reference_coverage.items():
+            paired = pd.DataFrame({('Adj Close', symbol): existing.prices[symbol],
+                                   ('Volume', symbol): existing.volumes[symbol]})
+            if history_coverage_issue(paired, symbol, reference_coverage):
+                raise ValueError(f'Immutable snapshot has truncated historical input: {symbol}')
         return existing
     root.mkdir(parents=True, exist_ok=True)
     universe = integrated_universe()
@@ -421,71 +452,74 @@ def collect_integrated_market(output_dir: Path, start="2010-01-01", end=None, sy
             continue
         receipts.append(info)
         for symbol in batch:
-            if ("Adj Close", symbol) not in data or data[("Adj Close", symbol)].dropna().empty:
-                # A successful batch response may still contain a transient
-                # per-ticker failure. Retry it separately, including on resume.
-                single_path = (
-                    cache / f"single-{hashlib.sha256(symbol.encode()).hexdigest()[:16]}.csv.gz"
-                )
-                single_receipt = single_path.with_suffix(".json")
+            issue = history_coverage_issue(data, symbol, reference_coverage)
+            missing = (('Adj Close', symbol) not in data or data[('Adj Close', symbol)].dropna().empty)
+            if missing or issue:
+                # Retry incomplete histories as well as wholly empty columns.
+                # Keep the original batch and each rejected response immutable.
+                stem = 'single-' + hashlib.sha256(symbol.encode()).hexdigest()[:16]
+                if issue:
+                    stem += '-coverage'
+                single_path = cache / (stem + '.csv.gz')
+                single_receipt = single_path.with_suffix('.json')
                 single = None
                 if single_path.exists() and single_receipt.exists():
                     single_info = json.loads(single_receipt.read_text())
-                    if _hash(single_path) != single_info["sha256"]:
-                        raise ValueError(f"Corrupt single-symbol download: {symbol}")
-                    single = pd.read_csv(single_path, header=[0, 1], index_col=0, parse_dates=True)
-                else:
+                    if _hash(single_path) != single_info['sha256']:
+                        raise ValueError(f'Corrupt single-symbol download: {symbol}')
+                    candidate = pd.read_csv(single_path, header=[0, 1], index_col=0, parse_dates=True)
+                    if not history_coverage_issue(candidate, symbol, reference_coverage):
+                        single = candidate
+                if single is None:
                     for attempt in range(2):
                         try:
-                            single = yf.download(
-                                [symbol],
-                                start=start,
-                                end=download_end,
-                                auto_adjust=False,
-                                actions=True,
-                                repair=False,
-                                keepna=True,
-                                progress=False,
-                                threads=False,
-                                timeout=30,
-                                group_by="column",
-                            )
-                            if not isinstance(single.columns, pd.MultiIndex):
-                                single.columns = pd.MultiIndex.from_product(
-                                    [single.columns, [symbol]]
-                                )
-                            if ("Adj Close", symbol) not in single or single[
-                                ("Adj Close", symbol)
-                            ].dropna().empty:
-                                raise ValueError("No adjusted price observations")
-                            single.index = (
-                                pd.to_datetime(single.index).tz_localize(None).normalize()
-                            )
-                            single.to_csv(single_path, compression={"method": "gzip", "mtime": 0})
-                            single_info = {
-                                "symbols": [symbol],
-                                "retrievedAt": datetime.now(timezone.utc).isoformat(),
-                                "sha256": _hash(single_path),
-                                "retryOf": key,
-                            }
-                            single_receipt.write_text(json.dumps(single_info, indent=2) + "\n")
+                            candidate = yf.download([symbol], start=start, end=download_end,
+                                auto_adjust=False, actions=True, repair=False, keepna=True,
+                                progress=False, threads=False, timeout=30, group_by='column')
+                            if not isinstance(candidate.columns, pd.MultiIndex):
+                                candidate.columns = pd.MultiIndex.from_product([candidate.columns, [symbol]])
+                            candidate.index = pd.to_datetime(candidate.index).tz_localize(None).normalize()
+                            if ('Adj Close', symbol) not in candidate or candidate[('Adj Close', symbol)].dropna().empty:
+                                raise ValueError('No adjusted price observations')
+                            # A successful HTTP response may still be truncated.
+                            # Record that response and reject it before analysis.
+                            suffix = ''
+                            sequence = 0
+                            while (cache / (stem + suffix + '.csv.gz')).exists():
+                                sequence += 1
+                                suffix = '-attempt-' + str(sequence)
+                            single_path = cache / (stem + suffix + '.csv.gz')
+                            single_receipt = single_path.with_suffix('.json')
+                            candidate.to_csv(single_path, compression={'method':'gzip', 'mtime':0})
+                            single_info = dict(symbols=[symbol], retrievedAt=datetime.now(timezone.utc).isoformat(),
+                                sha256=_hash(single_path), retryOf=key,
+                                retryReason=issue or 'missing_adjusted_price')
+                            bad = history_coverage_issue(candidate, symbol, reference_coverage)
+                            if bad:
+                                single_info['rejectedCoverage'] = bad
+                            single_receipt.write_text(json.dumps(single_info, indent=2) + '\n')
+                            if bad:
+                                raise ValueError('Truncated positive-volume history after single-symbol retry')
+                            single = candidate
                             break
                         except Exception as exc:
                             failures[symbol] = str(exc)
-                            single = None
                             if attempt == 0:
                                 time.sleep(1)
                 if single is None:
+                    if issue:
+                        failure = dict(symbol=symbol, issue=issue, error=failures.get(symbol))
+                        (root / 'history-coverage-failure.json').write_text(json.dumps(failure, indent=2)+'\n')
+                        raise ValueError(f'Truncated historical input remains after bounded retry: {symbol}')
                     continue
                 failures.pop(symbol, None)
                 receipts.append(single_info)
-                for name, field_name in mapping.items():
-                    if (field_name, symbol) in single:
-                        collected[name][symbol] = single[(field_name, symbol)]
-                continue
+                source = single
+            else:
+                source = data
             for name, field_name in mapping.items():
-                if (field_name, symbol) in data:
-                    collected[name][symbol] = data[(field_name, symbol)]
+                if (field_name, symbol) in source:
+                    collected[name][symbol] = source[(field_name, symbol)]
     if "SPY" not in collected["prices"]:
         raise ValueError("SPY calendar unavailable; snapshot not published")
     spy_calendar = collected["prices"]["SPY"].dropna().index
@@ -519,6 +553,14 @@ def collect_integrated_market(output_dir: Path, start="2010-01-01", end=None, sy
         "providerAdjustmentHorizonEndExclusive": download_end,
         "request": request,
         "receipts": receipts,
+        "inputCoverage": {symbol: {
+            **positive_volume_coverage(pd.DataFrame({('Adj Close', symbol): frames['prices'][symbol],
+                                                    ('Volume', symbol): frames['volumes'][symbol]}),
+                                       symbol, str(output_calendar[-1].date())),
+            'asOf': str(output_calendar[-1].date()),
+            'basis': 'positive_adjusted_close_and_positive_provider_volume'}
+            for symbol in requested},
+        "inputCoverageReferenceHash": hashlib.sha256(json.dumps(reference_coverage, sort_keys=True).encode()).hexdigest(),
         "priceBasis": "Yahoo Adj Close: split and dividend adjusted; no separate dividend reinvestment",
         "ohlcvBasis": "Yahoo auto_adjust=False OHLC and volume; provider split-adjusted basis, not independently reconstructed as-traded observations",
         "dollarVolumeBasis": "Yahoo Close × Yahoo Volume; same paired provider basis",

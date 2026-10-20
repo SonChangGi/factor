@@ -194,7 +194,86 @@ def current_source():
     return subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
 
 
-def run(workspace, baseline, candidate, source_commit, *, now=None):
+def coverage_contract_from_result(payload):
+    """First migration uses the same positive-volume price basis as collection."""
+    if payload['data'].get('inputCoverage'):
+        return payload['data']['inputCoverage']
+    patches = {}
+    for row in payload['data'].get('amendments', []):
+        if row['kind'] == 'observed_quote':
+            patches[row['symbol']] = patches.get(row['symbol'], 0) + 1
+    return {row['symbol']: dict(observations=max(0, row['observations']-patches.get(row['symbol'], 0)),
+                               firstObservation=row['firstObservation'], asOf=payload['data']['asOf'],
+                               basis='positive_adjusted_close_and_positive_provider_volume')
+            for row in payload['data']['symbols']}
+
+
+def seed_download_cache(reuse_root, destination, target):
+    """Copy only verified provider responses; never splice old price matrices."""
+    source, destination = Path(reuse_root) / 'raw', Path(destination)
+    manifest_path = source / 'manifest.json'
+    manifest = json.loads(manifest_path.read_text())
+    identity = manifest.pop('snapshotId')
+    if hashlib.sha256(json.dumps(manifest, sort_keys=True).encode()).hexdigest() != identity:
+        raise ValueError('Reused input manifest is corrupt')
+    manifest['snapshotId'] = identity
+    expected_end = (datetime.fromisoformat(target).date()+timedelta(days=1)).isoformat()
+    request = json.loads((source / 'request.json').read_text())
+    if request['endExclusive'] != expected_end or manifest['dataAsOf'] != target:
+        raise ValueError('Reused input cache belongs to a different completed session')
+    destination.mkdir(parents=True, exist_ok=False)
+    shutil.copyfile(source / 'request.json', destination / 'request.json')
+    downloads = source / 'downloads'
+    for path in downloads.rglob('*'):
+        if path.is_symlink():
+            raise ValueError('Reused input cache contains symbolic links')
+    shutil.copytree(downloads, destination / 'downloads')
+    return dict(sourcePath=str(source), sourceSnapshotId=identity,
+                sourceManifestSha256=hashlib.sha256(manifest_path.read_bytes()).hexdigest(),
+                sourceCacheKey=os.environ.get('FACTOR_REUSED_INPUT_CACHE_KEY'))
+
+
+def export_input_diagnostics(reuse_root, output):
+    """Read a restored cache; never collect, calculate a factor or publish."""
+    import pandas as pd
+    root, output = Path(reuse_root), Path(output)
+    if output.exists():
+        raise FileExistsError('Choose a new diagnostics output directory')
+    output.mkdir(parents=True)
+    symbols = ['CECO','IBOC','UUU','TYL','BOH','GPN','AAP','FISV','PSA','DEA']
+    receipt = dict(schemaVersion='factor-input-diagnostics/v1', sourcePath=str(root),
+                   sourceCacheKey=os.environ.get('FACTOR_REUSED_INPUT_CACHE_KEY'),
+                   cacheId=os.environ.get('FACTOR_REUSED_INPUT_CACHE_ID'),
+                   sourceCommit=current_source(), inputSourceCommit=os.environ.get('FACTOR_REUSED_INPUT_SOURCE_SHA'), symbols=symbols,
+                   start='2015-01-01', end='2016-12-15', files={})
+    for stage in ('raw', 'market'):
+        folder = root / stage
+        manifest_file = folder / 'manifest.json'
+        manifest = json.loads(manifest_file.read_text())
+        receipt[stage] = dict(snapshotId=manifest['snapshotId'],
+            manifestSha256=hashlib.sha256(manifest_file.read_bytes()).hexdigest())
+        target = output / stage
+        target.mkdir()
+        shutil.copyfile(manifest_file, target / 'manifest.json')
+        for relative, digest in manifest['files'].items():
+            if relative not in {f'{f}.csv.gz' for f in ('prices','raw_close','provider_close','raw_open','raw_high','raw_low','volumes','provider_volumes','splits','dividends','eligibility')}:
+                continue
+            path = folder / relative
+            if hashlib.sha256(path.read_bytes()).hexdigest() != digest:
+                raise ValueError('Restored input matrix hash mismatch: ' + relative)
+            date_column = pd.read_csv(path, nrows=0).columns[0]
+            frame = pd.read_csv(path, index_col=0, parse_dates=True,
+                                usecols=lambda col: col in symbols or col == date_column)
+            frame = frame.loc[receipt['start']:receipt['end']]
+            export = target / relative.replace('.gz', '')
+            frame.to_csv(export)
+            receipt['files'][export.relative_to(output).as_posix()] = hashlib.sha256(export.read_bytes()).hexdigest()
+    from .integrated_service import atomic_json
+    atomic_json(output / 'receipt.json', receipt)
+    return receipt
+
+
+def run(workspace, baseline, candidate, source_commit, *, now=None, reuse_input_root=None):
     from .integrated_data import collect_integrated_market, save_integrated_market
     from .integrated_service import atomic_json, execute_run, build_site, code_fingerprint
     from .integrated_validation import validate_automated_result, write_automated_manifest
@@ -215,7 +294,12 @@ def run(workspace, baseline, candidate, source_commit, *, now=None):
     staging = candidate.with_name(candidate.name + '.tmp-' + uuid.uuid4().hex)
     try:
         end = (datetime.fromisoformat(target).date() + timedelta(days=1)).isoformat()
-        raw = collect_integrated_market(workspace / 'raw', '2010-01-01', end)
+        if reuse_input_root:
+            status['reusedInputCache'] = seed_download_cache(reuse_input_root, workspace / 'raw', target)
+            atomic_json(workspace / 'status.json', status)
+        baseline_payload = json.loads((baseline / 'data/integrated-result.json').read_text())
+        reference = coverage_contract_from_result(baseline_payload)
+        raw = collect_integrated_market(workspace / 'raw', '2010-01-01', end, reference_coverage=reference)
         if raw.metadata['dataAsOf'] != target:
             raise ValueError('Provider has not supplied the completed target session')
         policy = json.loads(POLICY.read_text())
@@ -298,6 +382,9 @@ def main(argv=None):
     receipt.add_argument('--workspace', type=Path, required=True)
     receipt.add_argument('--cache-key', required=True)
     receipt.add_argument('--cache-id', required=True)
+    diagnostics = sub.add_parser('export-input-diagnostics')
+    diagnostics.add_argument('--reuse-input-root', type=Path, required=True)
+    diagnostics.add_argument('--output', type=Path, required=True)
     for name in ('run', 'promote'):
         command = sub.add_parser(name)
         command.add_argument('--workspace', type=Path, required=True)
@@ -305,14 +392,17 @@ def main(argv=None):
         command.add_argument('--candidate', type=Path, required=True)
         if name == 'run':
             command.add_argument('--source-commit', required=True)
+            command.add_argument('--reuse-input-root', type=Path)
     args = parser.parse_args(argv)
     if args.command == 'freshness':
         for key, value in freshness(args.site, args.event_name).items():
             print(f'{key}={str(value).lower() if isinstance(value, bool) else value or "none"}')
     elif args.command == 'confirm-input-cache':
         print(json.dumps(confirm_input_cache(args.workspace, args.cache_key, args.cache_id)))
+    elif args.command == 'export-input-diagnostics':
+        print(json.dumps(export_input_diagnostics(args.reuse_input_root, args.output)))
     elif args.command == 'run':
-        print(json.dumps(run(args.workspace, args.baseline, args.candidate, args.source_commit)))
+        print(json.dumps(run(args.workspace, args.baseline, args.candidate, args.source_commit, reuse_input_root=args.reuse_input_root)))
     else:
         print(json.dumps(promote(args.workspace, args.baseline, args.candidate)))
     return 0

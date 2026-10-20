@@ -301,3 +301,67 @@ def test_quality_quarantines_shape_inputs_preserving_close_and_sources(tmp_path)
     save_integrated_market(m, tmp_path)
     restored = load_integrated_market(tmp_path)
     pd.testing.assert_frame_equal(restored.shape_valid, m.shape_valid, check_freq=False)
+
+
+def test_nonempty_truncated_batch_is_retried_as_full_paired_history(tmp_path, monkeypatch):
+    import yfinance as yf
+    from factor_lab.integrated_data import collect_integrated_market
+    calls = []
+    def download(symbols, **kwargs):
+        calls.append(list(symbols))
+        dates = pd.bdate_range('2025-01-01', periods=4)
+        fields = {'Adj Close':9.,'Close':10.,'Open':9.5,'High':11.,'Low':9.,
+                  'Volume':2e6,'Dividends':0.,'Stock Splits':0.}
+        columns = {(field,symbol):[value]*4 for symbol in symbols for field,value in fields.items()}
+        frame = pd.DataFrame(columns,index=dates)
+        if len(symbols)>1:
+            frame.loc[dates[:-1],pd.IndexSlice[:, 'A']] = np.nan
+        return frame
+    monkeypatch.setattr(yf,'download',download)
+    reference={'A':dict(observations=4,firstObservation='2025-01-01',asOf='2025-01-06')}
+    market=collect_integrated_market(tmp_path,start='2025-01-01',end='2025-02-01',symbols=['A'],reference_coverage=reference)
+    assert ['A'] in calls and market.prices.A.notna().sum()==4
+    assert (market.raw_close.A*market.volumes.A==20e6).all()
+    assert market.metadata['inputCoverage']['A']['observations']==4
+    assert market.metadata['receipts'][-1]['retryReason']['reason']=='truncated_positive_volume_history'
+
+
+def test_persistent_truncated_history_blocks_snapshot_before_calculation(tmp_path,monkeypatch):
+    import yfinance as yf
+    from factor_lab.integrated_data import collect_integrated_market
+    monkeypatch.setattr('factor_lab.integrated_data.time.sleep',lambda *a:None)
+    def download(symbols,**kwargs):
+        dates=pd.bdate_range('2025-01-01',periods=4)
+        fields={'Adj Close':9.,'Close':10.,'Open':9.5,'High':11.,'Low':9.,'Volume':2e6,'Dividends':0.,'Stock Splits':0.}
+        frame=pd.DataFrame({(field,symbol):[value]*4 for symbol in symbols for field,value in fields.items()},index=dates)
+        frame.loc[dates[:-1],pd.IndexSlice[:,'A']]=np.nan
+        return frame
+    monkeypatch.setattr(yf,'download',download)
+    with pytest.raises(ValueError,match='Truncated historical input remains'):
+        collect_integrated_market(tmp_path,start='2025-01-01',end='2025-02-01',symbols=['A'],
+            reference_coverage={'A':dict(observations=4,firstObservation='2025-01-01',asOf='2025-01-06')})
+    assert not (tmp_path/'manifest.json').exists()
+    assert (tmp_path/'history-coverage-failure.json').exists()
+    assert len(list((tmp_path/'downloads').glob('single-*-coverage*.csv.gz')))==2
+
+
+def test_new_session_does_not_mask_loss_of_old_observation():
+    from factor_lab.integrated_data import history_coverage_issue
+    dates=pd.to_datetime(['2025-01-02','2025-01-03','2025-01-06'])
+    frame=pd.DataFrame({('Adj Close','A'):[10.]*3,('Volume','A'):[100.]*3},index=dates)
+    expected={'A':dict(observations=3,firstObservation='2025-01-01',asOf='2025-01-03')}
+    assert history_coverage_issue(frame,'A',expected)['observed']['observations']==2
+
+
+def test_immutable_snapshot_rechecks_reference_prefix_not_total_count(tmp_path):
+    from factor_lab.integrated_data import save_integrated_market,collect_integrated_market
+    dates=pd.to_datetime(['2025-01-02','2025-01-03','2025-01-06'])
+    prices=pd.DataFrame({'A':[10.]*3},index=dates)
+    volumes=prices*0+100
+    market=IntegratedMarket(prices,prices,prices,prices,prices,volumes,prices*0,prices*0,
+        prices.notna(),dict(request=dict(start='2025-01-01',endExclusive='2025-02-01',symbols=['A']),
+        inputCoverage={'A':dict(observations=3,firstObservation='2025-01-02',asOf='2025-01-06')}))
+    save_integrated_market(market,tmp_path)
+    with pytest.raises(ValueError,match='Immutable snapshot has truncated'):
+        collect_integrated_market(tmp_path,start='2025-01-01',end='2025-02-01',symbols=['A'],
+            reference_coverage={'A':dict(observations=3,firstObservation='2025-01-01',asOf='2025-01-03')})

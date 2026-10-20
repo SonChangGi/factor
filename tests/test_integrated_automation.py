@@ -139,6 +139,9 @@ def test_collection_failure_records_failed_attempt_and_preserves_last_good(tmp_p
     baseline, workspace, candidate = (tmp_path / s for s in ['site', 'run', 'candidate'])
     baseline.mkdir()
     (baseline / 'last-good.json').write_text('published')
+    (baseline / 'data').mkdir()
+    (baseline / 'data/integrated-result.json').write_text(json.dumps(
+        dict(schemaVersion='integrated-factor/v1', data=dict(asOf='2026-10-16',symbols=[]))))
     before = automation.tree_hash(baseline)
     with pytest.raises(ValueError, match='provider incomplete'):
         automation.run(workspace, baseline, candidate, 'source',
@@ -236,3 +239,61 @@ def test_input_cache_must_be_confirmed_before_promotion(tmp_path, monkeypatch):
         automation.confirm_input_cache(workspace, 'wrong-key', '123')
     automation.confirm_input_cache(workspace, status['inputCacheKey'], '123')
     assert automation.promote(workspace, baseline, candidate)['state'] == 'promoted'
+
+
+def test_initial_coverage_contract_subtracts_only_verified_inserted_trade_quotes():
+    payload={'data':dict(asOf='2026-10-16',symbols=[dict(symbol='A',observations=4,firstObservation='2020-01-02')],
+        amendments=[dict(kind='observed_quote',symbol='A'),dict(kind='non_trading_valuation_mark',symbol='A')])}
+    contract=automation.coverage_contract_from_result(payload)
+    assert contract['A']['observations']==3 and contract['A']['asOf']=='2026-10-16'
+    payload['data']['inputCoverage']={'A':dict(observations=2,firstObservation='2020-01-02',asOf='2026-10-16')}
+    assert automation.coverage_contract_from_result(payload)==payload['data']['inputCoverage']
+
+
+def test_recovery_copies_only_provider_downloads_without_splicing_input_matrices(tmp_path):
+    import hashlib
+    old=tmp_path/'restored/raw'; old.mkdir(parents=True)
+    request=dict(start='2010-01-01',endExclusive='2026-10-20',symbols=['A'])
+    (old/'request.json').write_text(json.dumps(request))
+    (old/'downloads').mkdir();(old/'downloads/batch.json').write_text('verified-elsewhere')
+    (old/'prices.csv.gz').write_text('old matrix never copied')
+    manifest=dict(dataAsOf='2026-10-19',request=request,files={})
+    manifest['snapshotId']=hashlib.sha256(json.dumps(manifest,sort_keys=True).encode()).hexdigest()
+    (old/'manifest.json').write_text(json.dumps(manifest))
+    destination=tmp_path/'new/raw'
+    receipt=automation.seed_download_cache(old.parent,destination,'2026-10-19')
+    assert (destination/'downloads/batch.json').exists()
+    assert not (destination/'prices.csv.gz').exists() and not (destination/'manifest.json').exists()
+    assert receipt['sourceSnapshotId']==manifest['snapshotId']
+    with pytest.raises(ValueError,match='different completed session'):
+        automation.seed_download_cache(old.parent,tmp_path/'another/raw','2026-10-20')
+
+
+def test_read_only_diagnostics_exports_original_selected_columns_and_provenance(tmp_path,monkeypatch):
+    import hashlib
+    source=tmp_path/'restored'
+    dates=pd.to_datetime(['2014-12-31','2015-02-25','2016-12-15','2017-01-03'])
+    for stage in ['raw','market']:
+        folder=source/stage;folder.mkdir(parents=True)
+        frame=pd.DataFrame({'BOH':[1.,1.0000003854,1.1,1.2],'OTHER':[2.]*4},index=dates)
+        frame.index.name='Date'
+        path=folder/'prices.csv.gz';frame.to_csv(path)
+        manifest={'snapshotId':'source-input', 'files':{'prices.csv.gz':hashlib.sha256(path.read_bytes()).hexdigest()}}
+        (folder/'manifest.json').write_text(json.dumps(manifest))
+    monkeypatch.setattr(automation,'current_source',lambda:'diagnostic-source')
+    monkeypatch.setenv('FACTOR_REUSED_INPUT_CACHE_ID','123')
+    output=tmp_path/'export'
+    receipt=automation.export_input_diagnostics(source,output)
+    exported=pd.read_csv(output/'raw/prices.csv',index_col=0)
+    assert list(exported.columns)==['BOH'] and list(exported.index)==['2015-02-25','2016-12-15']
+    assert receipt['cacheId']=='123' and receipt['raw']['snapshotId']=='source-input'
+    assert exported.BOH.iloc[0]==1.0000003854
+
+
+def test_diagnostics_job_cannot_calculate_or_publish():
+    workflow=(Path(__file__).resolve().parents[1]/'.github/workflows/daily-dashboard.yml').read_text()
+    diagnostics=workflow.split('  input-cache-diagnostics:\n',1)[1]
+    assert 'export-input-diagnostics' in diagnostics
+    assert 'integrated_automation run' not in diagnostics and 'git push' not in diagnostics
+    assert 'actions/cache/restore@' in diagnostics and 'fail-on-cache-miss: true' in diagnostics
+    assert 'inputs.diagnostics_only != true' in workflow

@@ -403,6 +403,18 @@
       "sourceUrl": "https://www.sec.gov/Archives/edgar/data/900075/000119312526423478/d129535d8k.htm",
       "retrievedAt": "2026-10-20",
       "reason": "Completed cash acquisition before open; legal entitlement, settlement date unverified"
+    },
+    {
+      "symbol": "ATKR",
+      "targetSymbol": null,
+      "date": "2026-10-19",
+      "cashPerShare": 95.0,
+      "settlementDate": null,
+      "sourceUrl": "https://www.sec.gov/Archives/edgar/data/1666138/000166613826000041/atkr-20261019.htm",
+      "legalSourceSections": ["Item 2.01", "Item 3.01", "Item 3.03"],
+      "confirmationSourceUrl": "https://www.emarketstorage.it/sites/default/files/comunicati/2026-10/20261019_190763.pdf",
+      "retrievedAt": "2026-10-20",
+      "reason": "Prysmian acquisition completed Oct19; each eligible outstanding common share converted to a non-interest-bearing USD95 cash entitlement. NYSE trading halted before open; actual payment date unverified."
     }
   ],
   "splitCorrections": [
@@ -428,7 +440,7 @@
       "reason": "Mandatory one ordinary share per ten ADRs. Provider did not neutralize units; preserve genuine price change after legal exchange."
     }
   ],
-  "policyVersion": "reviewed-market-policy-2026-10-20-v1",
+  "policyVersion": "reviewed-market-policy-2026-10-20-v2",
   "reviewedThrough": "2026-10-16",
   "reconciliation": "Reapply documented evidence to each new primary snapshot; skip already matching provider splits and quotes, reject changed adjustment basis or conflicting source evidence. No automatically guessed marks.",
   "maxHistoricalNavRevision": 0.001

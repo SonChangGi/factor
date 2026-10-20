@@ -28,7 +28,7 @@ def test_pages_failure_cannot_be_hidden_by_existing_site_health():
 ])
 def test_workflow_never_treats_page_reachability_as_a_successful_refresh(override, expected):
     workflow = Path(".github/workflows/daily-dashboard.yml").read_text()
-    final_job = workflow.split("  refresh-result:\n", 1)[1]
+    final_job = workflow.split("  refresh-result:\n", 1)[1].split("  input-cache-diagnostics:\n", 1)[0]
     script = textwrap.dedent(final_job.split("        run: |\n", 1)[1])
     environment = {**os.environ, "UPDATE_RESULT": "success", "REFRESH_SKIPPED": "false",
                    "DEPLOY_RESULT": "success", "SHOULD_DEPLOY": "true", **override}
