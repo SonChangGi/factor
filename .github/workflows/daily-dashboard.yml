@@ -276,7 +276,7 @@ jobs:
         shell: bash
         run: |
           set -u
-          required_paths=(index.html data/summary.json data/dashboard.json)
+          required_paths=(index.html publication.json data/integrated-result.json)
           for attempt in {1..12}; do
             usable=true
             for relative_path in "${required_paths[@]}"; do
@@ -319,7 +319,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Require a verified refresh and Pages readback
+      - name: Require a verified legacy refresh and integrated Pages readback
         env:
           UPDATE_RESULT: ${{ needs.update-dashboard.result }}
           REFRESH_SKIPPED: ${{ needs.update-dashboard.outputs.refresh_skipped }}
@@ -328,10 +328,11 @@ jobs:
           DEPLOY_RESULT: ${{ needs.request-pages-deployment.result }}
           SHOULD_DEPLOY: ${{ needs.update-dashboard.outputs.should_deploy_pages }}
         run: |
+          echo "Legacy Momentum data refresh; the integrated page retains its separately reviewed snapshot." >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
           [[ "${UPDATE_RESULT}" == success ]] || exit 1
           [[ "${REFRESH_SKIPPED}" == true ]] && exit 0
           [[ "${BUILD_OUTCOME}" == success && "${REFRESH_STATE}" == available ]] || {
-            echo "::error::No new validated dashboard was published. See the preserved refresh diagnostics."
+            echo "::error::No new validated legacy dashboard was published. See the preserved refresh diagnostics."
             exit 1
           }
           if [[ "${SHOULD_DEPLOY}" == true ]]; then

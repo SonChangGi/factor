@@ -27,6 +27,11 @@ permissions:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  OPENBLAS_NUM_THREADS: 1
+  OMP_NUM_THREADS: 1
+  MKL_NUM_THREADS: 1
+  VECLIB_MAXIMUM_THREADS: 1
+  NUMEXPR_NUM_THREADS: 1
 
 jobs:
   deploy-pages:
@@ -126,7 +131,17 @@ jobs:
             tests/test_latest_session_repair.py \
             tests/test_index_history_repair.py \
             tests/test_scheduled_recovery.py
+          python scripts/validate_integrated_publication.py site
+          python -m momentum_factor_lab.publication_security site
+          python -m pytest -q tests/test_integrated*.py
+          npm ci --ignore-scripts
+          node --test scripts/test_integrated_web.cjs
+          for test in scripts/test_integrated*dom.cjs; do
+            node "$test" site/data/integrated-result.json
+          done
           python -m momentum_factor_lab.publication_security docs
+          python scripts/build_integrated_publication.py --output public
+          python -m momentum_factor_lab.publication_security public
           node --check docs/assets/dashboard.js
           MFL_TEST_PAYLOAD=docs/data/grid/v1/latest.json node scripts/test_web_contract.mjs
           MFL_TEST_PAYLOAD=docs/data/grid/v1/latest.json node scripts/test_common_design_v1_dom.mjs
@@ -138,7 +153,7 @@ jobs:
       - name: Build exact Pages artifact
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5
         with:
-          path: docs
+          path: public
 
       - name: Reject a stale main after artifact upload
         env:
@@ -168,7 +183,7 @@ jobs:
             echo "Unexpected Pages deployment URL: ${PAGE_URL}" >&2
             exit 1
           fi
-          mapfile -d '' public_files < <(find docs -type f -print0 | sort -z)
+          mapfile -d '' public_files < <(find public -type f -print0 | sort -z)
           if (( ${#public_files[@]} == 0 )); then
             echo "No committed public files were found." >&2
             exit 1
@@ -178,7 +193,7 @@ jobs:
           for attempt in {1..18}; do
             all_match=true
             for local_path in "${public_files[@]}"; do
-              relative="${local_path#docs/}"
+              relative="${local_path#public/}"
               if [[ ! "${relative}" =~ ^[A-Za-z0-9._/-]+$ ]]; then
                 echo "Unsupported public path for deterministic readback: ${relative}" >&2
                 exit 1
@@ -223,7 +238,7 @@ jobs:
         shell: bash
         run: |
           set -u
-          required_paths=(index.html data/summary.json data/dashboard.json)
+          required_paths=(index.html publication.json data/integrated-result.json)
           for attempt in {1..12}; do
             usable=true
             for relative_path in "${required_paths[@]}"; do

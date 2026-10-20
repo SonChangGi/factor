@@ -251,13 +251,16 @@ def test_pages_workflow_has_one_owner_current_main_and_exact_readback() -> None:
     assert "actions/configure-pages@" in pages
     assert "actions/upload-pages-artifact@" in pages
     assert "actions/deploy-pages@" in pages
-    assert "find docs -type f -print0" in pages
+    assert "find public -type f -print0" in pages
+    assert "path: public" in pages
+    assert "python scripts/build_integrated_publication.py --output public" in pages
+    assert "python scripts/validate_integrated_publication.py site" in pages
     assert '--header "Cache-Control: no-cache"' in pages
     assert "--connect-timeout 10" in pages
     assert "--max-time 120" in pages
     assert "cmp --silent" in pages
     assert "continue-on-error:" not in pages
     assert "public-site-health:" in pages
-    assert "required_paths=(index.html data/summary.json data/dashboard.json)" in pages
+    assert "required_paths=(index.html publication.json data/integrated-result.json)" in pages
     assert "build_type=workflow" in readme
     assert "GITHUB_TOKEN" in readme

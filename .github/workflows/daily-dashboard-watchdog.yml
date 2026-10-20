@@ -80,16 +80,20 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           PAGE_URL: https://sonchanggi.github.io/momentum-factor-lab/
+          PUBLICATION_ROOT: public
         shell: bash
         run: |
           set -euo pipefail
           source_sha="$(git rev-parse HEAD)"
           readonly source_sha
           [[ "${source_sha}" =~ ^[0-9a-f]{40}$ ]] || exit 1
+          if [[ "${PUBLICATION_ROOT:-docs}" == public ]]; then
+            python scripts/build_integrated_publication.py --output public
+          fi
           public_files=()
           while IFS= read -r -d '' local_path; do
             public_files+=("${local_path}")
-          done < <(find docs -type f -print0 | sort -z)
+          done < <(find "${PUBLICATION_ROOT:-docs}" -type f -print0 | sort -z)
           (( ${#public_files[@]} > 0 )) || { echo "No public files to verify." >&2; exit 1; }
           readback_dir="$(mktemp -d)"
           trap 'rm -rf "$readback_dir"' EXIT
@@ -98,7 +102,7 @@ jobs:
             readback_attempt=$((readback_attempt + 1))
             local deadline=$((SECONDS + 300)) local_path relative remote_path remaining request_timeout
             for local_path in "${public_files[@]}"; do
-              relative="${local_path#docs/}"
+              relative="${local_path#${PUBLICATION_ROOT:-docs}/}"
               [[ "${relative}" =~ ^[A-Za-z0-9._/-]+$ ]] || return 1
               remaining=$((deadline - SECONDS))
               (( remaining > 0 )) || return 1
@@ -162,7 +166,7 @@ jobs:
         shell: bash
         run: |
           set -u
-          required_paths=(index.html data/summary.json data/dashboard.json)
+          required_paths=(index.html publication.json data/integrated-result.json)
           for attempt in {1..12}; do
             usable=true
             for relative_path in "${required_paths[@]}"; do

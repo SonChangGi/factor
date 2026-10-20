@@ -1,6 +1,19 @@
 # Momentum Factor Lab
 
-미국 개별주 2,700개 이상을 대상으로 64개 모멘텀 팩터를 같은 조건과 같은 고정 비중 방법으로 비교하는 연구 도구입니다. 계산의 canonical source는 Python이며, 정적 웹은 사전 계산된 결과를 선택하고 표시합니다. 공개 preset에 없는 입력은 loopback Python API 또는 명시적으로 설정된 공통 control API가 같은 엔진으로 다시 실행합니다.
+Momentum과 Best의 합집합 2,960종목을 사용해 가격·거래량 32개 정의를 연구하고, 26개 후보 중에서 매월 팩터를 선택합니다. 최근 756거래일의 비용 후 CAGR·Sortino·Calmar·MDD·기간 안정성을 비교하며 실제 보유에서 다음 거래일 종가 목표로 이동하는 회계를 계산합니다.
+
+[통합 화면](https://sonchanggi.github.io/momentum-factor-lab/)은 현재 선택·팩터 탐색·비교·실험·데이터를 제공합니다. [통합 사용법](docs/development/integrated-local.md), [데이터 계약](docs/development/integrated-data-contract.md), [성과 감사](docs/development/performance-repair-2026-10-20.md), [배포 계약](docs/development/deployment-2026-10-20.md)을 참고하세요.
+
+```bash
+python -m momentum_factor_lab.cli integrated-run --snapshot <frozen-snapshot> --output <new-run-directory>
+python -m momentum_factor_lab.cli serve-integrated --snapshot <frozen-snapshot> --site <reviewed-site> --runs <runs-directory> --port 50073
+```
+
+공개 정적 화면은 검증된 결과를 조회합니다. 로컬 실험은 같은 Python 엔진으로 실행합니다. 기존 예약 계산·Control JSON은 별도 legacy 계약으로 유지하며 새 통합 결과로 묵시 변환하지 않습니다.
+
+## 기존 Momentum 계산 참고
+
+아래는 통합 전에 사용하던 독립 Momentum 입력·CLI·회계 계약입니다. 공개 통합 화면의 후보 수와 월별 선택 규칙은 위 통합 계약을 따릅니다.
 
 이 프로젝트가 내놓는 비중은 마지막 실제 입력일 신호로 만든 **다음 세션 종가용 연구 목표**입니다. 실제 체결 또는 개인화된 투자 권고가 아닙니다.
 
@@ -184,6 +197,8 @@ provider credential 형식과 민감한 JSON 필드를 스캔하며, 탐지된 �
 출력하거나 push-protection 우회 대상으로 처리하지 않고 게시를 중단합니다. 원격
 control run도 immutable artifact와 sidecar를 같은 scanner로 통과한 뒤에만
 커밋합니다.
+
+현재 통합 Pages는 검증한 `site/`와 legacy `docs/data/`를 조립한 `public/`를 게시합니다. 아래 기존 grid/Control 주소는 호환 경로로 유지합니다.
 
 Pages 게시자는 `Deploy Momentum Pages` workflow 하나입니다. 사람의 `main` push는
 직접 배포를 요청하고, `GITHUB_TOKEN`으로 만든 정기 dashboard·controlled-result

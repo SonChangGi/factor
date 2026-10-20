@@ -26,3 +26,6 @@ credentials/
 *.egg-info/
 
 .cache/
+
+node_modules/
+public/

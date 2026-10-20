@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ko" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>모멘텀 팩터 랩</title>
+  <script>
+    (() => {let theme;try {theme=localStorage.getItem('quant-research-theme');}catch(_){} if(!['light','dark'].includes(theme))theme=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.dataset.theme=theme;})();
+  </script>
+  <link rel="stylesheet" href="assets/styles.css">
+  <link rel="stylesheet" href="assets/shared-nav.css">
+  <link rel="stylesheet" href="assets/integrated.css">
+  <script defer src="assets/integrated.js"></script>
+</head>
+<body id="top" class="has-quant-shared-nav integrated-app">
+<a class="skip-link" href="#main-content">본문으로 건너뛰기</a>
+<nav class="site-nav quant-shared-nav" aria-label="연결 프로젝트 바로가기"><div class="quant-shared-nav__inner">
+  <a class="quant-shared-nav__brand" href="https://sonchanggi.github.io/quant-dashboard/">Quant Research Hub</a>
+  <div class="site-nav-links quant-shared-nav__links" aria-label="프로젝트 목록">
+    <a class="quant-shared-nav__link" href="https://sonchanggi.github.io/fearNgreed/">Fear &amp; Greed</a>
+    <a class="quant-shared-nav__link is-active" href="./" aria-current="page">Momentum</a>
+    <a class="quant-shared-nav__link" href="https://sonchanggi.github.io/dram-price/">DRAM</a>
+    <a class="quant-shared-nav__link" href="https://sonchanggi.github.io/etf-tracking/">ETF</a>
+    <a class="quant-shared-nav__link" href="https://sonchanggi.github.io/sox/">SOX</a>
+    <a class="quant-shared-nav__link" href="https://sonchanggi.github.io/regime/">Regime</a>
+    <a class="quant-shared-nav__link" href="https://sonchanggi.github.io/news/">News</a>
+    <a class="quant-shared-nav__link" href="https://sonchanggi.github.io/SPO/">SPO</a>
+    <a class="quant-shared-nav__link" href="https://research-observatory-changgi.changgi-son.chatgpt.site/">알파 하우스</a>
+  </div>
+  <button id="theme-toggle" class="theme-toggle quant-shared-nav__theme" type="button" aria-label="다크 모드로 전환" aria-pressed="false"><span class="theme-toggle-icon" aria-hidden="true"></span></button>
+</div></nav>
+<main id="main-content" tabindex="-1" class="lab-shell">
+  <header class="lab-heading"><div><p class="lab-eyebrow">Quant Research · Factor Lab</p><h1>모멘텀 팩터 랩</h1></div><div class="lab-context"><span id="data-date">기준일 —</span><span class="lab-badge" id="result-state">불러오는 중</span></div></header>
+  <nav class="lab-tabs" aria-label="팩터 랩 화면">
+    <a href="#current" data-view="current" aria-current="page">현재 선택</a><a href="#explore" data-view="explore">팩터 탐색</a><a href="#compare" data-view="compare">비교 <span id="compare-count">0</span></a><a href="#experiments" data-view="experiments">실험</a><a href="#data" data-view="data">데이터</a>
+  </nav>
+  <p id="app-message" class="lab-message" role="status" aria-live="polite">결과를 불러오고 있습니다.</p>
+  <section id="view-current" class="lab-view" aria-label="현재 선택"><div id="current-content"></div></section>
+  <section id="view-explore" class="lab-view" aria-label="팩터 탐색" hidden>
+    <div class="lab-toolbar"><label>팩터 찾기<input id="factor-search" type="search" placeholder="이름·ID·가설" autocomplete="off"></label><label>계열<select id="family-filter"><option value="">전체 계열</option></select></label><label>상태<select id="status-filter"><option value="">전체</option><option value="candidate">월별 선택 후보</option><option value="research">연구 전용</option><option value="available">계산 가능</option><option value="unavailable">자료 부족</option></select></label><label>정렬<select id="factor-sort"><option value="catalog">정의 순서</option><option value="score">선택점수</option><option value="cagr">CAGR</option><option value="sortino">Sortino</option><option value="max_drawdown">MDD</option><option value="ic">매수 방향 IC</option></select></label><button class="lab-button secondary" id="export-factors" type="button">CSV 저장</button></div>
+    <div id="explore-summary" class="lab-caption"></div><div id="factor-table"></div><section id="factor-detail" hidden aria-label="팩터 상세"></section>
+  </section>
+  <section id="view-compare" class="lab-view" aria-label="팩터 비교" hidden><div id="compare-content"></div></section>
+  <section id="view-experiments" class="lab-view" aria-label="실험" hidden>
+    <div class="lab-panel"><div class="lab-section-heading"><h2>새 실험</h2><span id="experiment-source" class="lab-caption"></span></div>
+      <p id="experiment-runtime" class="lab-caption" role="status"></p>
+      <form id="experiment-form" class="lab-form"><fieldset id="experiment-fields" disabled><p id="experiment-target" class="lab-caption" hidden></p><label>실험 대상<select id="experiment-mode"><option value="monthly">기본 월별 선택</option><option value="legacy">기존 팩터 변형</option></select></label><div id="legacy-fields" hidden><div class="lab-form-grid"><label>정의 검색<input id="legacy-search" type="search" placeholder="이름·계열"></label><label>기존 정의<select id="legacy-definition"><option value="">정의 불러오는 중</option></select></label></div><p id="legacy-description" class="lab-caption"></p></div><label>가설<textarea name="hypothesis" rows="2" required placeholder="무엇을 바꿔 어떤 결과를 확인할까요?"></textarea></label><div class="lab-form-grid"><label>Top-N<input name="top_n" type="number" min="1" max="100" step="1" value="20" required></label><label>최대 종목 비중 (%)<input name="max_weight" type="number" min="1" max="100" step="1" value="10" required></label><label>거래비용 (bp)<input name="transaction_cost_bps" type="number" min="0" max="500" step="1" value="5" required></label><label>슬리피지 (bp)<input name="slippage_bps" type="number" min="0" max="500" step="1" value="5" required></label><label>추가 체결 지연 (거래일)<input name="execution_delay_sessions" type="number" min="0" max="5" value="0" step="1" required></label><label>비중 정책<select name="weighting"><option value="score_liquidity_rank">팩터·유동성 70/30</option><option value="equal">동일 비중</option></select></label></div><div class="lab-actions"><button class="lab-button" type="submit">실험 실행</button><button class="lab-button secondary" id="reset-experiment" type="button">현재 결과 설정으로</button><span id="experiment-diff" class="lab-caption">현재 결과와 동일</span></div></fieldset></form>
+      <p id="experiment-status" role="status" aria-live="polite" class="lab-caption"></p>
+    </div><section class="lab-panel"><h2>실험 이력</h2><div id="experiment-history"><div id="experiment-jobs"></div><div id="experiment-stress"></div></div></section>
+  </section>
+  <section id="view-data" class="lab-view" aria-label="데이터" hidden><div id="data-content"></div></section>
+  <footer class="lab-footer"><span>Momentum Factor Lab</span><button id="export-result" class="lab-text-button" type="button">실행 결과 JSON</button></footer>
+</main>
+<noscript><p>이 결과를 보려면 JavaScript를 켜주세요.</p></noscript>
+</body></html>

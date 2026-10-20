@@ -476,6 +476,8 @@ def build_parser() -> argparse.ArgumentParser:
     scheduled.add_argument("--site-dir", type=Path, help="Override config site_dir")
     scheduled.add_argument("--title", help="Override config title")
     scheduled.add_argument("--json", action="store_true", help="Print the compact summary as JSON")
+    from .integrated_cli import add_integrated_commands
+    add_integrated_commands(subparsers)
     return parser
 
 
@@ -1165,6 +1167,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
+        if args.command in {"integrated-collect", "integrated-amend", "integrated-run", "serve-integrated"}:
+            from .integrated_cli import dispatch
+            return dispatch(args)
         if args.command == "build-site":
             if args.site_dir.resolve() == Path("docs").resolve():
                 raise ValueError(

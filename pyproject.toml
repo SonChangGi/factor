@@ -36,6 +36,7 @@ src = ["momentum_factor_lab", "tests"]
 [tool.setuptools.package-data]
 momentum_factor_lab = [
   "resources/*.csv",
+  "resources/integrated_*.json",
   "web/*.html",
   "web/*.css",
   "web/*.js",

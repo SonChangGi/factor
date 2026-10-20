@@ -1,0 +1,7 @@
+{
+  "name": "momentum-publication-checks",
+  "version": "1.0.0",
+  "private": true,
+  "engines": {"node": ">=22.13.0"},
+  "devDependencies": {"jsdom": "29.1.1"}
+}
