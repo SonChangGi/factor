@@ -48,3 +48,12 @@ def test_fresh_publication_skips_all_input_cache_resolution_and_restore():
                            ("Restore previous primary input vintage for guarded history preservation", "archive")):
         step = update.split("      - name: " + name + "\n", 1)[1].split("      - name: ", 1)[0]
         assert f"if: steps.{resolver}.outputs.enabled == 'true'" in step
+
+
+def test_financial_calculation_and_input_diagnostics_pin_the_runner_os():
+    workflow = Path(".github/workflows/daily-dashboard.yml").read_text()
+    for job in ("update-dashboard", "input-cache-diagnostics"):
+        import re
+        body = re.split(r"(?m)^  [a-z][a-z-]*:\s*$", workflow.split("  " + job + ":\n", 1)[1], maxsplit=1)[0]
+        assert "    runs-on: ubuntu-24.04" in body
+        assert "ubuntu-latest" not in body
