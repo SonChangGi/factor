@@ -372,7 +372,10 @@ def collect_integrated_market(output_dir: Path, start="2010-01-01", end=None, sy
     requested = sorted(
         set(symbols if symbols is not None else [r["symbol"] for r in universe["symbols"]])
     )
-    today = pd.Timestamp(datetime.now(timezone.utc).date())
+    from .dashboard_freshness import expected_recent_us_close_date
+    collected_at = datetime.now(timezone.utc)
+    today = pd.Timestamp(collected_at.date())
+    completed_through = pd.Timestamp(expected_recent_us_close_date(collected_at))
     end = end or today.date().isoformat()
     # Historical output still requires all later corporate actions because
     # Yahoo retroactively split-adjusts the entire downloaded price history.
@@ -545,7 +548,7 @@ def collect_integrated_market(output_dir: Path, start="2010-01-01", end=None, sy
     if "SPY" not in collected["prices"]:
         raise ValueError("SPY calendar unavailable; snapshot not published")
     spy_calendar = collected["prices"]["SPY"].dropna().index
-    output_calendar = spy_calendar[(spy_calendar < pd.Timestamp(end)) & (spy_calendar < today)]
+    output_calendar = spy_calendar[(spy_calendar < pd.Timestamp(end)) & (spy_calendar <= completed_through)]
     if output_calendar.empty:
         raise ValueError("No completed SPY sessions in requested output interval")
     # Include action-only rows beyond the last completed market session while

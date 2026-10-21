@@ -77,6 +77,40 @@ def test_partial_batch_retries_symbol_and_retains_field_pairing(tmp_path, monkey
     assert len(m.metadata["receipts"]) == 2
 
 
+@pytest.mark.parametrize('now,expected', [
+    ('2026-10-21T19:59:59+00:00','2026-10-20'),
+    ('2026-10-21T20:00:00+00:00','2026-10-21'),
+    ('2026-10-21T22:17:00+00:00','2026-10-21'),
+    ('2026-10-22T01:47:00+00:00','2026-10-21'),
+    ('2026-11-27T17:59:59+00:00','2026-11-25'),
+    ('2026-11-27T18:00:00+00:00','2026-11-27'),
+])
+def test_collection_uses_same_completed_session_as_automation(tmp_path,monkeypatch,now,expected):
+    from datetime import datetime
+    import yfinance as yf
+    from factor_lab import integrated_data as data
+    from factor_lab.dashboard_freshness import expected_recent_us_close_date
+    frozen = datetime.fromisoformat(now)
+    class Clock(datetime):
+        @classmethod
+        def now(cls,tz=None):
+            return frozen.astimezone(tz) if tz else frozen.replace(tzinfo=None)
+    monkeypatch.setattr(data,'datetime',Clock)
+    def download(symbols,**kwargs):
+        # Include today's and future quotes so neither can bypass the close gate.
+        dates=pd.bdate_range(pd.Timestamp(frozen.date())-pd.Timedelta(days=7),periods=9)
+        fields={'Adj Close':9.,'Close':10.,'Open':9.5,'High':11.,'Low':9.,
+                'Volume':2e6,'Dividends':0.,'Stock Splits':0.}
+        return pd.DataFrame({(field,symbol):value for symbol in symbols
+                             for field,value in fields.items()},index=dates)
+    monkeypatch.setattr(yf,'download',download)
+    end=(pd.Timestamp(frozen.date())+pd.Timedelta(days=2)).date().isoformat()
+    result=data.collect_integrated_market(tmp_path,start='2026-01-01',end=end,symbols=['A'])
+    assert result.metadata['dataAsOf']==expected
+    assert result.metadata['dataAsOf']==expected_recent_us_close_date(frozen).isoformat()
+    assert result.prices.index[-1]==pd.Timestamp(expected)
+
+
 def test_collector_does_not_admit_unverified_zero_volume_valuations(tmp_path, monkeypatch):
     import yfinance as yf
     from factor_lab.integrated_data import collect_integrated_market
