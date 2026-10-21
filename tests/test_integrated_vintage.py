@@ -158,7 +158,8 @@ def test_workflow_preserves_original_cache_paths_and_retains_vintage_audit():
     assert '${{ steps.archive.outputs.path }}/raw\n' in workflow
 
 
-def test_daily_path_calculates_from_bound_vintage_and_keeps_downloads(tmp_path,monkeypatch):
+@pytest.mark.parametrize('revision', ['none','nav','choice','gap'])
+def test_daily_path_calculates_from_bound_vintage_and_keeps_downloads(tmp_path,monkeypatch,revision):
     from factor_lab import integrated_automation as automation
     from factor_lab import integrated_data as data, integrated_service as service
     from factor_lab import integrated_validation as validation
@@ -168,18 +169,34 @@ def test_daily_path_calculates_from_bound_vintage_and_keeps_downloads(tmp_path,m
     save_integrated_market(old,tmp_path/'archive/raw')
     baseline=tmp_path/'site'
     (baseline/'data').mkdir(parents=True)
-    payload=dict(settings={},registry=[],selection={'nav':[],'history':[]},factors=[],
+    payload=dict(settings={},registry=[],
+        selection={'nav':[],'history':[{'signalDate':'2026-09-30','status':'selected','factorId':'A'}]},
+        factors=[{'id':'A','nav':[{'date':'2026-10-15','value':1.}]}],
         data={'asOf':old.metadata['dataAsOf'],'symbols':[],
               'inputCache':{'rawSnapshotId':old.metadata['snapshotId']}})
     (baseline/'data/integrated-result.json').write_text(json.dumps(payload))
     def collect(path,*args,**kwargs):
         fresh=market(pd.DataFrame({'A':[45.,49.5,54.]},index=dates),
                      raw=pd.DataFrame({'A':[100.,110.,120.]},index=dates))
+        if revision != 'none':
+            fresh.raw_close=fresh.raw_close.copy()
+            fresh.raw_close.iloc[0,0]=101.  # a genuine source change, not price noise
         return save_integrated_market(fresh,path)
     def calculate(m,*args):
-        assert m.prices.A.to_list()==[90.,99.,108.]
-        return {**payload,'data':{**m.metadata,'asOf':str(dates[-1].date())},
+        if revision == 'none':
+            assert m.prices.A.to_list()==[90.,99.,108.]
+        else:
+            assert m.prices.A.to_list()==[45.,49.5,54.]  # complete fresh basis
+            assert m.metadata['priceVintage']['unfrozenSourceRevisions'][0]['symbol']=='A'
+        result={**deepcopy(payload),'data':{**m.metadata,'asOf':str(dates[-1].date())},
                 'resultIdentity':{'resultId':'new'}}
+        if revision == 'nav':
+            result['factors'][0]['nav'][0]['value']=1.002
+        elif revision == 'choice':
+            result['selection']['history'][0]['factorId']='B'
+        elif revision == 'gap':
+            result['factors'][0]['nav'][0]['value']=None
+        return result
     def policy(m,*args):
         m.metadata['automationPolicy']={}
         return m
@@ -196,6 +213,21 @@ def test_daily_path_calculates_from_bound_vintage_and_keeps_downloads(tmp_path,m
     monkeypatch.setattr(validation,'validate_automated_result',lambda *a,**kw:{})
     monkeypatch.setattr(validation,'write_automated_manifest',lambda *a:None)
     monkeypatch.setenv('FACTOR_INPUT_CACHE_KEY','factor-input-v1-test-1')
+    before=automation.tree_hash(baseline)
+    if revision != 'none':
+        with pytest.raises(ValueError,match='Historical NAV or choices changed'):
+            automation.run(tmp_path/'run',baseline,tmp_path/'candidate','source',
+                           archived_input_root=tmp_path/'archive')
+        report=json.loads((tmp_path/'run/history-revision.json').read_text())
+        expected={'nav':'nav_revision_exceeds_threshold',
+                  'choice':'historical_choice_changed','gap':'observation_or_null_changed'}
+        assert report['threshold']==.001 and report['status']=='review_required'
+        assert any(row['reason']==expected[revision] for row in report['issues'])
+        status=json.loads((tmp_path/'run/status.json').read_text())
+        assert status['state']=='failed' and status['lastGoodPreserved'] is True
+        assert automation.tree_hash(baseline)==before
+        assert not (tmp_path/'candidate').exists()
+        return
     status=automation.run(tmp_path/'run',baseline,tmp_path/'candidate','source',
                           archived_input_root=tmp_path/'archive')
     assert status['state']=='validated'
