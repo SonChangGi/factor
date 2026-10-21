@@ -185,3 +185,19 @@ def test_daily_path_calculates_from_bound_vintage_and_keeps_downloads(tmp_path,m
     result=json.loads((tmp_path/'candidate/result.json').read_text())
     canonical=load_accepted_vintage(tmp_path/'run',result)
     assert canonical.prices.A.to_list()==[90.,99.,108.]
+
+
+def test_snapshot_roundtrip_preserves_bits_across_future_daily_runs(tmp_path):
+    from factor_lab.integrated_data import load_integrated_market
+    from factor_lab.integrated_archive import load_archived_columns
+    prices=pd.DataFrame({'A':[np.nextafter(1.3,np.inf),np.nextafter(1.2,np.inf)]},
+                        index=pd.bdate_range('2026-10-15',periods=2))
+    original=market(prices)
+    saved=save_integrated_market(original,tmp_path/'raw')
+    loaded=load_integrated_market(tmp_path/'raw')
+    np.testing.assert_array_equal(loaded.prices.to_numpy(),prices.to_numpy())
+    archived=load_archived_columns(tmp_path/'raw',{'A'})
+    np.testing.assert_array_equal(archived.prices.to_numpy(),prices.to_numpy())
+    save_integrated_market(loaded,tmp_path/'again')
+    reloaded=load_integrated_market(tmp_path/'again')
+    np.testing.assert_array_equal(reloaded.prices.to_numpy(),saved.prices.to_numpy())

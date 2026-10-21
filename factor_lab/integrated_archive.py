@@ -38,7 +38,7 @@ def load_archived_columns(directory, symbols):
         if digest.hexdigest() != metadata['files'][path.name]:
             raise ValueError('Archived input matrix hash mismatch: ' + name)
         header = pd.read_csv(path, nrows=0).columns[0]
-        frame = pd.read_csv(path, index_col=0, parse_dates=True,
+        frame = pd.read_csv(path, index_col=0, parse_dates=True, float_precision="round_trip",
                             usecols=lambda column: column == header or column in symbols)
         if set(frame.columns) != set(symbols):
             raise ValueError('Archived input is missing requested canonical symbols')

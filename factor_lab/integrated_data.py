@@ -163,7 +163,7 @@ def load_integrated_market(snapshot_dir: Path):
         path = root / f"{name}.csv.gz"
         if _hash(path) != manifest["files"][path.name]:
             raise ValueError(f"Snapshot hash mismatch: {name}")
-        frames[name] = pd.read_csv(path, index_col=0, parse_dates=True)
+        frames[name] = pd.read_csv(path, index_col=0, parse_dates=True, float_precision="round_trip")
     frames["eligibility"] = frames["eligibility"].astype(bool)
     if "shape_valid" in frames:
         frames["shape_valid"] = frames["shape_valid"].astype(bool)
