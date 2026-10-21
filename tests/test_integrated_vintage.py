@@ -74,21 +74,40 @@ def test_append_uses_same_response_return_and_leaves_both_sources_unchanged():
     pd.testing.assert_frame_equal(fixed.prices,fixed.valuation_prices)
 
 
-@pytest.mark.parametrize('field', ['raw_close','volumes','dividends','splits'])
-def test_real_source_revision_is_not_silently_frozen(field):
+@pytest.mark.parametrize('field', ['raw_close','dividends','splits'])
+def test_real_source_revision_keeps_complete_current_column_for_history_gate(field):
     old=recorded('baseline',['ATEN','NBR'],'2018-01-02')
-    new=deepcopy(old)
+    new=recorded('earlier',['ATEN','NBR'],'2018-01-02')
     getattr(new,field).iloc[100,0] += 1
-    with pytest.raises(ValueError,match='Historical source revision requires review'):
-        extend_price_vintage(new,old)
+    fixed=extend_price_vintage(new,old)
+    pd.testing.assert_series_equal(fixed.prices.ATEN,new.prices.ATEN)
+    pd.testing.assert_series_equal(fixed.prices.NBR,old.prices.NBR)
+    record=fixed.metadata['priceVintage']['unfrozenSourceRevisions'][0]
+    assert record['symbol']=='ATEN'
+    assert record['policy']=='complete_current_column_subject_to_unchanged_history_gate'
 
 
-def test_missing_observation_or_calendar_cannot_be_filled_from_old_snapshot():
+def test_late_recovered_quote_is_not_discarded_or_spliced_into_old_basis():
     old=recorded('baseline',['ATEN','NBR'],'2018-01-02')
-    new=deepcopy(old)
-    new.prices.iloc[100,0]=np.nan
-    with pytest.raises(ValueError,match='null state'):
-        extend_price_vintage(new,old)
+    new=recorded('earlier',['ATEN','NBR'],'2018-01-02')
+    old.prices.iloc[-1,0]=np.nan
+    old.raw_close.iloc[-1,0]=np.nan
+    fixed=extend_price_vintage(new,old)
+    pd.testing.assert_series_equal(fixed.prices.ATEN,new.prices.ATEN)
+    assert 'ATEN' in [r['symbol'] for r in fixed.metadata['priceVintage']['unfrozenSourceRevisions']]
+
+
+def test_volume_correction_uses_current_liquidity_without_rewriting_price_history():
+    old=recorded('baseline',['ATEN','NBR'],'2018-01-02')
+    new=recorded('earlier',['ATEN','NBR'],'2018-01-02')
+    new.volumes.iloc[100,0] += 1
+    fixed=extend_price_vintage(new,old)
+    pd.testing.assert_frame_equal(fixed.prices,old.prices)
+    pd.testing.assert_frame_equal(fixed.volumes,new.volumes)
+
+
+def test_calendar_change_still_fails_closed():
+    old=recorded('baseline',['ATEN','NBR'],'2018-01-02')
     new=replace(old,prices=old.prices.iloc[1:])
     with pytest.raises(ValueError,match='calendar'):
         extend_price_vintage(new,old)
@@ -201,3 +220,26 @@ def test_snapshot_roundtrip_preserves_bits_across_future_daily_runs(tmp_path):
     save_integrated_market(loaded,tmp_path/'again')
     reloaded=load_integrated_market(tmp_path/'again')
     np.testing.assert_array_equal(reloaded.prices.to_numpy(),saved.prices.to_numpy())
+
+
+def test_actual_avvsy_late_quote_that_blocked_first_recovery_is_retained():
+    records=json.loads((FIXTURE/'late-observation.json').read_text())
+    def load(label):
+        frames={k:pd.DataFrame(rows).set_index('Date') for k,rows in records[label]['fields'].items()}
+        for frame in frames.values():
+            frame.index=pd.to_datetime(frame.index)
+        return market(frames['prices'],raw=frames['raw_close'],volumes=frames['volumes'],
+                      identity=records[label]['rawSnapshotId'])
+    old,new=load('baseline'),load('current')
+    # Actions fields are zero on the missing-price rows as in the raw source.
+    for m in (old,new):
+        m.dividends=m.prices*0
+        m.splits=m.prices*0
+        m.dividends=m.dividends.fillna(0)
+        m.splits=m.splits.fillna(0)
+    fixed=extend_price_vintage(new,old)
+    assert pd.isna(old.prices.at['2026-10-19','AVVSY'])
+    assert fixed.prices.at['2026-10-19','AVVSY']==8.170000076293945
+    assert fixed.volumes.at['2026-10-19','AVVSY']==466
+    pd.testing.assert_frame_equal(fixed.prices,new.prices)
+    assert fixed.metadata['priceVintage']['unfrozenSourceRevisions'][0]['symbol']=='AVVSY'

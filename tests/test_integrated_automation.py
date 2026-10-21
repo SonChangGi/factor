@@ -311,3 +311,23 @@ def test_diagnostics_reject_invalid_symbols_and_dates_before_writing(tmp_path):
         with pytest.raises(ValueError):
             automation.export_input_diagnostics(tmp_path / 'absent', output, **options)
         assert not output.exists()
+
+
+def test_raw_only_failed_input_can_be_diagnosed_without_claiming_a_market(tmp_path,monkeypatch):
+    import hashlib
+    source=tmp_path/'restored'
+    raw=source/'raw'
+    raw.mkdir(parents=True)
+    frame=pd.DataFrame({'AVVSY':[7.81,8.]},index=pd.to_datetime(['2026-10-15','2026-10-19']))
+    frame.to_csv(raw/'prices.csv.gz',compression='gzip')
+    (raw/'manifest.json').write_text(json.dumps({'snapshotId':'raw-only',
+        'files':{'prices.csv.gz':hashlib.sha256((raw/'prices.csv.gz').read_bytes()).hexdigest()}}))
+    monkeypatch.setattr(automation,'current_source',lambda:'diagnostic-source')
+    output=tmp_path/'export'
+    receipt=automation.export_input_diagnostics(source,output,symbols=['AVVSY'],
+        start='2026-10-15',end='2026-10-20')
+    assert receipt['market']=={'state':'not_created'}
+    assert (output/'raw/prices.csv').exists()
+    assert not (output/'market').exists()
+    with pytest.raises(FileNotFoundError):
+        automation.export_input_diagnostics(tmp_path/'missing',tmp_path/'missing-export',symbols=['AVVSY'])

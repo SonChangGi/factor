@@ -263,6 +263,9 @@ def export_input_diagnostics(reuse_root, output, *, symbols=None, start='2015-01
     for stage in ('raw', 'market'):
         folder = root / stage
         manifest_file = folder / 'manifest.json'
+        if stage == 'market' and not manifest_file.exists():
+            receipt[stage] = dict(state='not_created')
+            continue
         manifest = json.loads(manifest_file.read_text())
         receipt[stage] = dict(snapshotId=manifest['snapshotId'],
             manifestSha256=hashlib.sha256(manifest_file.read_bytes()).hexdigest())

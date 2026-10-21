@@ -1,0 +1,122 @@
+{
+  "baseline": {
+    "cache": "factor-input-v1-39412432541-1",
+    "rawSnapshotId": "9332be7b6cc81c786d238724c07add8947407cffcd4498c2eb34876aa8a63046",
+    "diagnosticRun": "39666243027",
+    "fields": {
+      "prices": [
+        {
+          "Date": "2026-10-15",
+          "AVVSY": 7.809999942779541
+        },
+        {
+          "Date": "2026-10-16",
+          "AVVSY": null
+        },
+        {
+          "Date": "2026-10-19",
+          "AVVSY": null
+        }
+      ],
+      "raw_close": [
+        {
+          "Date": "2026-10-15",
+          "AVVSY": 7.809999942779541
+        },
+        {
+          "Date": "2026-10-16",
+          "AVVSY": null
+        },
+        {
+          "Date": "2026-10-19",
+          "AVVSY": null
+        }
+      ],
+      "volumes": [
+        {
+          "Date": "2026-10-15",
+          "AVVSY": 1895.0
+        },
+        {
+          "Date": "2026-10-16",
+          "AVVSY": 0.0
+        },
+        {
+          "Date": "2026-10-19",
+          "AVVSY": 0.0
+        }
+      ]
+    },
+    "sourceFileHashes": {
+      "prices": "a740bcb8907f2ff5095ba9ea4dda7bec2802f3edb77bdcf112c0cb4f1de6b9c4",
+      "raw_close": "a740bcb8907f2ff5095ba9ea4dda7bec2802f3edb77bdcf112c0cb4f1de6b9c4",
+      "volumes": "6156d0b1d82ecee7ce0b969d28bb2c34fd534302506bc2e6125e0a146d2a8510"
+    }
+  },
+  "current": {
+    "cache": "factor-input-v1-39582839920-1",
+    "rawSnapshotId": "538d56b37fbaa79e8b5e620d8abda1199cc3258e45be787db4a5381ad8b0cce5",
+    "diagnosticRun": "39666526027",
+    "fields": {
+      "prices": [
+        {
+          "Date": "2026-10-15",
+          "AVVSY": 7.809999942779541
+        },
+        {
+          "Date": "2026-10-16",
+          "AVVSY": null
+        },
+        {
+          "Date": "2026-10-19",
+          "AVVSY": 8.170000076293945
+        },
+        {
+          "Date": "2026-10-20",
+          "AVVSY": 8.1850004196167
+        }
+      ],
+      "raw_close": [
+        {
+          "Date": "2026-10-15",
+          "AVVSY": 7.809999942779541
+        },
+        {
+          "Date": "2026-10-16",
+          "AVVSY": null
+        },
+        {
+          "Date": "2026-10-19",
+          "AVVSY": 8.170000076293945
+        },
+        {
+          "Date": "2026-10-20",
+          "AVVSY": 8.1850004196167
+        }
+      ],
+      "volumes": [
+        {
+          "Date": "2026-10-15",
+          "AVVSY": 1895.0
+        },
+        {
+          "Date": "2026-10-16",
+          "AVVSY": 0.0
+        },
+        {
+          "Date": "2026-10-19",
+          "AVVSY": 466.0
+        },
+        {
+          "Date": "2026-10-20",
+          "AVVSY": 100.0
+        }
+      ]
+    },
+    "sourceFileHashes": {
+      "prices": "6bd2c7c16ae79ed126b8e900707c04de89312e7072aba0789cd7b3cb9931c1d3",
+      "raw_close": "6bd2c7c16ae79ed126b8e900707c04de89312e7072aba0789cd7b3cb9931c1d3",
+      "volumes": "686833901f1ecc20cc498bd35bd31033651907d55436577e705a639f94a0dc0c"
+    }
+  }
+}
