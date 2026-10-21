@@ -1,0 +1,59 @@
+{
+  "baseline": {
+    "cache": "factor-input-v1-39412432541-1",
+    "snapshot": "911cb9e5eb211a8dff2efb9b34a60c35a38f326deafcc19b5accb85ac12c5171",
+    "diagnosticRun": "39661408098",
+    "sourceFileHashes": {
+      "market/prices.csv": "db9eee9805ddf1f68adf518b48891e3a0ecead1047c2ff6f645ae52c2dfa699d",
+      "market/raw_close.csv": "e0538462d54633d1c40e64811b8d5f3e51f6981187f13cfb21c326e99089f028",
+      "market/raw_open.csv": "63d2e6cc49ac8cfbe38dccb49a1001ad9c550d629a57aba12eff0c656ae79e83",
+      "market/raw_high.csv": "9a1b3b3c7d41d61bf0bb5e0821a3614e22687ce9dc5ecadf6f3b2d1ea361b75c",
+      "market/raw_low.csv": "fb9809d31ec4dcdebe497e53c6f9ada4f518ad73b16ff9a3a95155376d8902f4",
+      "market/volumes.csv": "e2c78f034a325dedce9da35dcb85036e51c522ed37fc8b9bcb7f79a47223614e",
+      "market/dividends.csv": "299c573567b4630c93f54f758bf868fedbfe8441dc9878bcd7663593811721c2",
+      "market/splits.csv": "0fc24994782eb6c1d1cbd088e7859a023270464c167dc57074c3fb8eb8e4fcf5",
+      "market/eligibility.csv": "ef0f82cf2f3aa2e0bde684ff2b3804b34cdae31ec0b267cf63af38a313624994",
+      "market/provider_close.csv": "6073ac290ca7dfa8c28f0ee83a1fd00082fb456fbef18b0678513bc5165e385e",
+      "market/provider_volumes.csv": "ef2c3c0f19c4972e808d47eaf38d6b053a0699a4553607026ba697a63c0096ab"
+    },
+    "fixtureSha256": "7633069826f0ab9002302f56729daeee613a88c37ce66c056873febbdbb60a18"
+  },
+  "latest": {
+    "cache": "factor-input-v1-39582839920-1",
+    "snapshot": "02dacee0cb71a3bf2a26f56c3103e666cd85000610ff6a9eb56be2ff2d32e2b3",
+    "diagnosticRun": "39661152719",
+    "sourceFileHashes": {
+      "market/prices.csv": "e5b68880f6fc57d18ddde805c11107a802d8ef6c11b8f15d647ba008ffa4cd04",
+      "market/raw_close.csv": "e6cd05f73d1328e902b0537662a24459a40130ebe34bd9cd329624ea77acb87d",
+      "market/raw_open.csv": "c17d3edb2c8446400294fc0793ba3026e16043057a8f4d1e14b6d4c781afb083",
+      "market/raw_high.csv": "d2a74177d99ec2b5d1422e21721fc5f31cd425200887f6f8b8da280608e28018",
+      "market/raw_low.csv": "0b96910ad81c8e9dff5623087ee20000f22370274b79a48ab7aacc81ec6aa4f0",
+      "market/volumes.csv": "68adce09b5291e2ddbd68148f9d2135a27bc334cde6665612f9bf1c4f40deca0",
+      "market/dividends.csv": "92010d067f6256e2b1fec399fecc6addbc94457591da8ce043ab041effeaf290",
+      "market/splits.csv": "504cd6b97b2839c51dcfdb7fe04d65e8e66180ba8ce38caac173e73917764261",
+      "market/eligibility.csv": "e499a11cb5394aad709cc74aa5f8ab21ee040257ecf4fe2dffeb7c820fcabc4b",
+      "market/provider_close.csv": "48c3e364e00fa7556a2206e7490060f8e3c6be206f1ab00a22b4dfe1725ca6fc",
+      "market/provider_volumes.csv": "5f3a64c02068dbc91ed8ba26118c16c3a648e25896f81dc91a938923453dac6e"
+    },
+    "fixtureSha256": "d8c7977d10695a8d52097e7814da565bfe7dce6cd967949fff5fabd005226c15"
+  },
+  "earlier": {
+    "cache": "factor-input-v1-39556437802-1",
+    "snapshot": "ae2d95b5e0e00ae47867f4061e46dfb65c6345acc05b5ee33ae2fdca65d5a4aa",
+    "diagnosticRun": "39661199193",
+    "sourceFileHashes": {
+      "market/prices.csv": "1d2eef142772b0bc50c0ed78dd10217ef76391c82e4e826c5a4d65a85a8b32d6",
+      "market/raw_close.csv": "2442b104c48400c82bc5aff3f65f1e744e21a805c01df80546628722c2bad10a",
+      "market/raw_open.csv": "bc9610e0e1d56bd364008744b32ab16a07af3bc4dc035cadeceb4681df9bcee0",
+      "market/raw_high.csv": "fc5bc673c9e8a34633b491a3b8a5c42d1f2fc39305c61a99585e2c734bbddb9f",
+      "market/raw_low.csv": "0f83f0a04e17b573bd779b11f13386a1bdff019e48e246720cd00ff701aee9a1",
+      "market/volumes.csv": "c5d065c605b062590d942c0330ca69fcbd2ceaf98b7bb07dacbde876217e040f",
+      "market/dividends.csv": "cc8545a6aaf41762762baf8f0dd4777c408b963bd62c926ff175f8e0bc15608b",
+      "market/splits.csv": "71632e74bc3d619c1cdd20fed56d5cd03abb21d062592ca1995d454666bfde3b",
+      "market/eligibility.csv": "40be1b3ab42b061c37f3b77c375e7bbb3786daf6282c08c8691dce30e1fc035b",
+      "market/provider_close.csv": "5501474dedd5663d3d05146e65808fbf75c68ae0be368d8ebad1a6dc32ed811e",
+      "market/provider_volumes.csv": "d6609ba1db34e22218c554bcf630467ebaf10923e64916a7d5cecd31cc057e76"
+    },
+    "fixtureSha256": "38a34dd550cd32ab0b67d8f38c9188ce5d3fa1cef67c5ef27affa5fea4245175"
+  }
+}

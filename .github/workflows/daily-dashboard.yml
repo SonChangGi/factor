@@ -275,6 +275,8 @@ jobs:
           path: |
             outputs/factor-daily/*/status.json
             outputs/factor-daily/*/history-revision.json
+            outputs/factor-daily/*/price-vintage.json
+            outputs/factor-daily/*/raw/price-vintage/manifest.json
             outputs/factor-daily/*/raw/history-coverage-failure.json
             outputs/factor-daily/*/raw/manifest.json
             outputs/factor-daily/*/market/manifest.json

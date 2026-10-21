@@ -316,12 +316,24 @@ def run(workspace, baseline, candidate, source_commit, *, now=None, reuse_input_
         raw = collect_integrated_market(workspace / 'raw', '2010-01-01', end, reference_coverage=reference, archived_input_root=archived_input_root)
         if raw.metadata['dataAsOf'] != target:
             raise ValueError('Provider has not supplied the completed target session')
+        from .integrated_vintage import load_accepted_vintage, extend_price_vintage
+        if archived_input_root is None:
+            raise ValueError('Daily calculation requires the baseline input vintage')
+        previous = load_accepted_vintage(archived_input_root, baseline_payload)
+        vintage = extend_price_vintage(raw, previous)
+        # Nested in raw so the existing cache path/version continues to restore
+        # both legacy raw caches and new caches containing a calculation vintage.
+        vintage = save_integrated_market(vintage, workspace / 'raw' / 'price-vintage')
+        atomic_json(workspace / 'price-vintage.json', vintage.metadata['priceVintage'])
         policy = json.loads(POLICY.read_text())
-        market = reconcile_policy(raw, policy)
+        market = reconcile_policy(vintage, policy)
         if status['inputCacheKey']:
             market.metadata['inputCache'] = dict(key=status['inputCacheKey'],
                 storage='GitHub Actions cache', retention='bounded_10GB_eviction_7_days_unused',
-                rawSnapshotId=raw.metadata['snapshotId'])
+                rawSnapshotId=raw.metadata['snapshotId'],
+                priceVintageSnapshotId=vintage.metadata['snapshotId'])
+        # Do not retain two extra full-universe snapshots during the backtest.
+        del previous, raw, vintage
         market_check = validate_market_refresh(market, json.loads((baseline / 'data/integrated-result.json').read_text()), target)
         market = save_integrated_market(market, workspace / 'market', compression_level=1)
         result = execute_run(market, dict(run_stress=True, bootstrap_repetitions=2000), workspace / 'analysis')

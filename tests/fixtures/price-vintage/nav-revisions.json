@@ -1,0 +1,220 @@
+{
+  "latest": {
+    "baseline": {
+      "settings": {},
+      "registry": [],
+      "selection": {
+        "nav": [],
+        "history": []
+      },
+      "factors": [
+        {
+          "id": "REL_DOWNSIDEBETA252",
+          "nav": [
+            {
+              "date": "2018-11-21",
+              "value": 1.5889084026358353
+            },
+            {
+              "date": "2018-11-23",
+              "value": 1.5766809052972448
+            },
+            {
+              "date": "2018-11-27",
+              "value": 1.5911002025244114
+            },
+            {
+              "date": "2018-11-28",
+              "value": 1.625296295157841
+            },
+            {
+              "date": "2018-11-30",
+              "value": 1.6370618921638085
+            }
+          ]
+        }
+      ]
+    },
+    "candidate": {
+      "settings": {},
+      "registry": [],
+      "selection": {
+        "nav": [],
+        "history": []
+      },
+      "factors": [
+        {
+          "id": "REL_DOWNSIDEBETA252",
+          "nav": [
+            {
+              "date": "2018-11-21",
+              "value": 1.587294374115067
+            },
+            {
+              "date": "2018-11-23",
+              "value": 1.575045925276768
+            },
+            {
+              "date": "2018-11-27",
+              "value": 1.5893844369779553
+            },
+            {
+              "date": "2018-11-28",
+              "value": 1.6234624391398518
+            },
+            {
+              "date": "2018-11-30",
+              "value": 1.6353127608972577
+            }
+          ]
+        }
+      ]
+    },
+    "report": {
+      "status": "review_required",
+      "maximumRelativeNavRevision": 0.0011283210473392868,
+      "threshold": 0.001,
+      "comparedObservations": 72009,
+      "maximumDifference": {
+        "curveId": "REL_DOWNSIDEBETA252",
+        "date": "2018-11-28",
+        "previous": 1.625296295157841,
+        "candidate": 1.6234624391398518
+      },
+      "issues": [
+        {
+          "curveId": "REL_DOWNSIDEBETA252",
+          "date": "2018-11-21",
+          "reason": "nav_revision_exceeds_threshold",
+          "relativeDifference": 0.0010158096703943853
+        },
+        {
+          "curveId": "REL_DOWNSIDEBETA252",
+          "date": "2018-11-23",
+          "reason": "nav_revision_exceeds_threshold",
+          "relativeDifference": 0.0010369758490661463
+        },
+        {
+          "curveId": "REL_DOWNSIDEBETA252",
+          "date": "2018-11-27",
+          "reason": "nav_revision_exceeds_threshold",
+          "relativeDifference": 0.001078351661154886
+        },
+        {
+          "curveId": "REL_DOWNSIDEBETA252",
+          "date": "2018-11-28",
+          "reason": "nav_revision_exceeds_threshold",
+          "relativeDifference": 0.0011283210473392868
+        },
+        {
+          "curveId": "REL_DOWNSIDEBETA252",
+          "date": "2018-11-30",
+          "reason": "nav_revision_exceeds_threshold",
+          "relativeDifference": 0.0010684576282200542
+        }
+      ]
+    }
+  },
+  "earlier": {
+    "baseline": {
+      "settings": {},
+      "registry": [],
+      "selection": {
+        "nav": [],
+        "history": []
+      },
+      "factors": [
+        {
+          "id": "SEASON5Y",
+          "nav": [
+            {
+              "date": "2023-10-17",
+              "value": 1.370535780911582
+            },
+            {
+              "date": "2023-10-18",
+              "value": 1.3213272176441866
+            },
+            {
+              "date": "2023-10-19",
+              "value": 1.2965308136847375
+            },
+            {
+              "date": "2023-10-20",
+              "value": 1.289303819578691
+            }
+          ]
+        }
+      ]
+    },
+    "candidate": {
+      "settings": {},
+      "registry": [],
+      "selection": {
+        "nav": [],
+        "history": []
+      },
+      "factors": [
+        {
+          "id": "SEASON5Y",
+          "nav": [
+            {
+              "date": "2023-10-17",
+              "value": 1.3719793785113703
+            },
+            {
+              "date": "2023-10-18",
+              "value": 1.3228131301297155
+            },
+            {
+              "date": "2023-10-19",
+              "value": 1.2979725571073197
+            },
+            {
+              "date": "2023-10-20",
+              "value": 1.2906052775733283
+            }
+          ]
+        }
+      ]
+    },
+    "report": {
+      "status": "review_required",
+      "maximumRelativeNavRevision": 0.001124560567349997,
+      "threshold": 0.001,
+      "comparedObservations": 72009,
+      "maximumDifference": {
+        "curveId": "SEASON5Y",
+        "date": "2023-10-18",
+        "previous": 1.3213272176441866,
+        "candidate": 1.3228131301297155
+      },
+      "issues": [
+        {
+          "curveId": "SEASON5Y",
+          "date": "2023-10-17",
+          "reason": "nav_revision_exceeds_threshold",
+          "relativeDifference": 0.0010533089466866485
+        },
+        {
+          "curveId": "SEASON5Y",
+          "date": "2023-10-18",
+          "reason": "nav_revision_exceeds_threshold",
+          "relativeDifference": 0.001124560567349997
+        },
+        {
+          "curveId": "SEASON5Y",
+          "date": "2023-10-19",
+          "reason": "nav_revision_exceeds_threshold",
+          "relativeDifference": 0.0011120008929712544
+        },
+        {
+          "curveId": "SEASON5Y",
+          "date": "2023-10-20",
+          "reason": "nav_revision_exceeds_threshold",
+          "relativeDifference": 0.0010094269286060609
+        }
+      ]
+    }
+  }
+}
