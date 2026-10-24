@@ -1,0 +1,82 @@
+{
+  "sourceCacheKey": "factor-input-v1-40082451865-1",
+  "sourceSnapshotId": "d70bd963f4c2a888c268e2cc11a83b11773e7b9b217f1393a84adbe6b2fb6430",
+  "diagnosticRun": "40125052851",
+  "sourceFieldHashes": {
+    "raw/prices.csv": "a3bae5db3a297c151d6f923a523870c8dcd0183dbff57083eb15f30715c41067",
+    "raw/raw_close.csv": "07c03d077380128c9944f3d4828423618f1837274e6a0551eae976c0b5be9041",
+    "raw/raw_open.csv": "2ad8420521c181f69e82a869080fc632510e0e1c7cdbaf6e8713d4eb2099ba1b",
+    "raw/raw_high.csv": "4f088721fd831fce94bc1cb7e620241183e40c6afbabbdad89ab6603835b3551",
+    "raw/raw_low.csv": "a67f80a172400578f72acec11571ecb3580837ee1254d0e190ccf90629e8d07b",
+    "raw/volumes.csv": "faab049b9ca414fff6d00a74479717ba727290bd7cfd236786010c781c76c6bb",
+    "raw/dividends.csv": "7f87cb58fe0e791eb3da91094900f2ee63772747a3d02da1ea4ee7197d243043",
+    "raw/splits.csv": "7f1a7b6312f16ca3a48284a147e77f020f2ec804aad86ceb353016d7eda94bcb",
+    "raw/eligibility.csv": "535629601adf84f0034e641412eccec6f50f73e4f975966af31ecf9e1f54e9ab",
+    "raw/provider_close.csv": "07c03d077380128c9944f3d4828423618f1837274e6a0551eae976c0b5be9041",
+    "raw/provider_volumes.csv": "a03cbd2b133f11fc970b2d7d622ec3f8378d8d8bcc0b8d376f739852901687b2",
+    "market/prices.csv": "a3bae5db3a297c151d6f923a523870c8dcd0183dbff57083eb15f30715c41067",
+    "market/raw_close.csv": "07c03d077380128c9944f3d4828423618f1837274e6a0551eae976c0b5be9041",
+    "market/raw_open.csv": "2ad8420521c181f69e82a869080fc632510e0e1c7cdbaf6e8713d4eb2099ba1b",
+    "market/raw_high.csv": "4f088721fd831fce94bc1cb7e620241183e40c6afbabbdad89ab6603835b3551",
+    "market/raw_low.csv": "a67f80a172400578f72acec11571ecb3580837ee1254d0e190ccf90629e8d07b",
+    "market/volumes.csv": "faab049b9ca414fff6d00a74479717ba727290bd7cfd236786010c781c76c6bb",
+    "market/dividends.csv": "7f87cb58fe0e791eb3da91094900f2ee63772747a3d02da1ea4ee7197d243043",
+    "market/splits.csv": "7f1a7b6312f16ca3a48284a147e77f020f2ec804aad86ceb353016d7eda94bcb",
+    "market/eligibility.csv": "535629601adf84f0034e641412eccec6f50f73e4f975966af31ecf9e1f54e9ab",
+    "market/provider_close.csv": "07c03d077380128c9944f3d4828423618f1837274e6a0551eae976c0b5be9041",
+    "market/provider_volumes.csv": "a03cbd2b133f11fc970b2d7d622ec3f8378d8d8bcc0b8d376f739852901687b2"
+  },
+  "frames": {
+    "prices": [
+      {
+        "Date": "2026-10-21",
+        "ACA": 149.02999877929688,
+        "SPY": 773.0900268554688
+      },
+      {
+        "Date": "2026-10-22",
+        "ACA": 149.14999389648438,
+        "SPY": 763.9600219726562
+      },
+      {
+        "Date": "2026-10-23",
+        "ACA": null,
+        "SPY": 759.969970703125
+      }
+    ],
+    "raw_close": [
+      {
+        "Date": "2026-10-21",
+        "ACA": 149.02999877929688,
+        "SPY": 773.0900268554688
+      },
+      {
+        "Date": "2026-10-22",
+        "ACA": 149.14999389648438,
+        "SPY": 763.9600219726562
+      },
+      {
+        "Date": "2026-10-23",
+        "ACA": null,
+        "SPY": 759.969970703125
+      }
+    ],
+    "volumes": [
+      {
+        "Date": "2026-10-21",
+        "ACA": 1339400.0,
+        "SPY": 31943800.0
+      },
+      {
+        "Date": "2026-10-22",
+        "ACA": 875000.0,
+        "SPY": 54117100.0
+      },
+      {
+        "Date": "2026-10-23",
+        "ACA": 0.0,
+        "SPY": 33377700.0
+      }
+    ]
+  }
+}

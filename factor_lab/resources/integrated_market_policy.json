@@ -482,6 +482,18 @@
   ],
   "exchanges": [
     {
+      "symbol": "ACA",
+      "targetSymbol": null,
+      "date": "2026-10-23",
+      "cashPerShare": 150.0,
+      "settlementDate": null,
+      "sourceUrl": "https://infomemo.theocc.com/infomemos?number=60029",
+      "confirmationSourceUrl": "https://www.crh.com/media/press-releases/2026/crh-completes-8-5b-acquisition-of-arcosa/",
+      "termsSourceUrl": "https://www.crh.com/media/press-releases/2026/crh-to-acquire-arcosa-leading-u-s-provider-of-aggregates-and-critical-infrastructure-products-for-8-5b/",
+      "retrievedAt": "2026-10-24",
+      "reason": "CRH acquisition consummated before open Oct23; each ACA common share converted to a USD150 cash entitlement. Actual shareholder payment date unverified; retain a non-interest-bearing receivable, not an executable quote or spendable cash."
+    },
+    {
       "symbol": "LBRDA",
       "targetSymbol": "CHTR",
       "date": "2026-08-20",
