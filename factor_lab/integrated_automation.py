@@ -115,6 +115,103 @@ def reconcile_policy(market, policy):
     return result
 
 
+class RefreshInputError(ValueError):
+    def __init__(self, code, message, symbols=()):
+        super().__init__(message)
+        self.code, self.symbols = code, sorted(set(symbols))
+
+
+def required_valuation_symbols(baseline_payload, target, actions=()):
+    """Continue every held security through only newly effective legal actions."""
+    previous = baseline_payload.get('data', {}).get('asOf', '')
+    held = {r['symbol'] for book in [baseline_payload.get('selection', {}), *baseline_payload.get('factors', [])]
+            for r in book.get('holdings', []) if r.get('weight', 0) > 0}
+    for action in sorted(actions, key=lambda r: r['date']):
+        if previous < action['date'] <= target and action['symbol'] in held:
+            destination = action.get('targetSymbol')
+            if destination is None:
+                amount = action.get('cashPerUnit', action.get('cashPerShare', 0))
+                if not isinstance(amount, (int, float)) or amount <= 0:
+                    raise ValueError('A held cash conversion has no positive legal consideration')
+            held.remove(action['symbol'])
+            if destination is not None:
+                held.add(destination)
+    return held
+
+
+def validate_required_valuations(market, baseline_payload, target):
+    """Fail before a full backtest if any continued holding cannot be valued."""
+    import pandas as pd
+    required = required_valuation_symbols(baseline_payload, target, market.metadata.get('corporateActions', []))
+    prices = market.valuation_prices if getattr(market, 'valuation_prices', None) is not None else market.prices
+    day = pd.Timestamp(target)
+    missing = [s for s in required if s not in prices or day not in prices.index or
+               pd.isna(prices.at[day, s]) or prices.at[day, s] <= 0]
+    if missing:
+        raise RefreshInputError('held_quote_missing', 'Required holding valuation unavailable: ' + ', '.join(sorted(missing)), missing)
+    return dict(targetDataAsOf=target, requiredHeldSymbols=len(required), valuedHeldSymbols=len(required))
+
+
+def provider_ready(baseline, output, *, now=None, attempts=3, delay_seconds=30, sleep=None, download=None, benchmarks_only=False):
+    """Small, bounded admission probe; its quotes never enter financial inputs."""
+    import time
+    import pandas as pd
+    import yfinance as yf
+    from .integrated_listing import listing_context, provider_symbols, normalize_provider_columns
+    from .integrated_service import atomic_json
+    if not 1 <= attempts <= 3 or not 0 <= delay_seconds <= 30:
+        raise ValueError('Provider admission is limited to three probes and 60 seconds waiting')
+    output = Path(output)
+    output.mkdir(parents=True, exist_ok=True)
+    baseline_payload = json.loads((Path(baseline) / 'data/integrated-result.json').read_text())
+    target = freshness(baseline, 'manual', now)['target_data_as_of']
+    policy = json.loads(POLICY.read_text())
+    required = set() if benchmarks_only else required_valuation_symbols(baseline_payload, target, policy.get('exchanges', []))
+    evidence = {r['symbol'] for kind in ('quotes', 'valuationMarks') for r in policy.get(kind, [])
+                if r['date'] == target and r.get('adjustedClose', 0) > 0}
+    remaining = set(('SPY', 'QQQ', '^IXIC')) | (required - evidence)
+    context = listing_context(sorted(remaining), target)
+    download = download or yf.download
+    sleep = sleep or time.sleep
+    receipts = []
+    for attempt in range(1, attempts + 1):
+        for offset in range(0, len(remaining), 25):
+            # Freeze this attempt's ordering, even when later batches succeed.
+            symbols = sorted(remaining)[offset:offset + 25]
+            if not symbols:
+                continue
+            source_symbols = list(provider_symbols(symbols, context).values())
+            try:
+                raw = download(source_symbols, start=(pd.Timestamp(target) - pd.Timedelta(days=7)).date().isoformat(),
+                    end=(pd.Timestamp(target) + pd.Timedelta(days=1)).date().isoformat(),
+                    auto_adjust=False, actions=False, repair=False, keepna=True, progress=False,
+                    threads=False, timeout=15, group_by='column')
+                path = output / f'probe-{attempt}-{offset}.csv.gz'
+                raw.to_csv(path, compression={'method': 'gzip', 'mtime': 0})
+                data = normalize_provider_columns(raw, symbols, context)
+                found = [symbol for symbol in symbols if ('Adj Close', symbol) in data and
+                         pd.Timestamp(target) in data.index and pd.notna(data.at[pd.Timestamp(target), ('Adj Close', symbol)]) and
+                         data.at[pd.Timestamp(target), ('Adj Close', symbol)] > 0 and
+                         ('Volume', symbol) in data and pd.notna(data.at[pd.Timestamp(target), ('Volume', symbol)]) and
+                         data.at[pd.Timestamp(target), ('Volume', symbol)] > 0]
+                receipts.append(dict(attempt=attempt, symbols=symbols, observed=found,
+                    path=path.name, sha256=hashlib.sha256(path.read_bytes()).hexdigest(),
+                    retrievedAtUtc=datetime.now(timezone.utc).isoformat()))
+            except Exception as exc:
+                receipts.append(dict(attempt=attempt, symbols=symbols, errorType=type(exc).__name__))
+        found = {s for receipt in receipts if receipt['attempt'] == attempt for s in receipt.get('observed', [])}
+        remaining -= found
+        status = dict(schemaVersion='factor-provider-readiness/v1', status='ready' if not remaining else 'waiting',
+            targetDataAsOf=target, missingSymbols=sorted(remaining), attempts=attempt,
+            policyHash=hashlib.sha256(POLICY.read_bytes()).hexdigest(), listing=context, receipts=receipts)
+        atomic_json(output / 'status.json', status)
+        if not remaining:
+            return status
+        if attempt < attempts:
+            sleep(delay_seconds)
+    raise RefreshInputError('provider_not_ready', 'Provider target-session quotes unavailable: ' + ', '.join(sorted(remaining)), remaining)
+
+
 def validate_market_refresh(market, baseline_payload, target):
     """A fresh benchmark alone cannot admit a broadly stale equity refresh."""
     import pandas as pd
@@ -123,7 +220,7 @@ def validate_market_refresh(market, baseline_payload, target):
         raise ValueError('Input calendar does not reach the target completed session')
     for symbol in ('SPY', 'QQQ', '^IXIC'):
         if symbol not in market.prices or pd.isna(market.prices.at[day, symbol]):
-            raise ValueError(f'Missing target-session benchmark: {symbol}')
+            raise RefreshInputError('benchmark_quote_missing', f'Missing target-session benchmark: {symbol}', [symbol])
     previous = {r['symbol'] for r in baseline_payload.get('data', {}).get('symbols', [])
                 if r.get('status') == 'eligible'}
     inactive = {r['symbol'] for r in market.metadata.get('corporateActions', [])
@@ -316,7 +413,9 @@ def run(workspace, baseline, candidate, source_commit, *, now=None, reuse_input_
             atomic_json(workspace / 'status.json', status)
         baseline_payload = json.loads((baseline / 'data/integrated-result.json').read_text())
         reference = coverage_contract_from_result(baseline_payload)
-        raw = collect_integrated_market(workspace / 'raw', '2010-01-01', end, reference_coverage=reference, archived_input_root=archived_input_root)
+        policy = json.loads(POLICY.read_text())
+        required_targets = required_valuation_symbols(baseline_payload, target, policy.get('exchanges', [])) | {'SPY', 'QQQ', '^IXIC'}
+        raw = collect_integrated_market(workspace / 'raw', '2010-01-01', end, reference_coverage=reference, archived_input_root=archived_input_root, target_session=target, required_target_symbols=required_targets)
         if raw.metadata['dataAsOf'] != target:
             raise ValueError('Provider has not supplied the completed target session')
         from .integrated_vintage import load_accepted_vintage, extend_price_vintage
@@ -328,7 +427,6 @@ def run(workspace, baseline, candidate, source_commit, *, now=None, reuse_input_
         # both legacy raw caches and new caches containing a calculation vintage.
         vintage = save_integrated_market(vintage, workspace / 'raw' / 'price-vintage')
         atomic_json(workspace / 'price-vintage.json', vintage.metadata['priceVintage'])
-        policy = json.loads(POLICY.read_text())
         market = reconcile_policy(vintage, policy)
         if status['inputCacheKey']:
             market.metadata['inputCache'] = dict(key=status['inputCacheKey'],
@@ -337,7 +435,8 @@ def run(workspace, baseline, candidate, source_commit, *, now=None, reuse_input_
                 priceVintageSnapshotId=vintage.metadata['snapshotId'])
         # Do not retain two extra full-universe snapshots during the backtest.
         del previous, raw, vintage
-        market_check = validate_market_refresh(market, json.loads((baseline / 'data/integrated-result.json').read_text()), target)
+        market_check = validate_market_refresh(market, baseline_payload, target)
+        market_check['holdingValuations'] = validate_required_valuations(market, baseline_payload, target)
         market = save_integrated_market(market, workspace / 'market', compression_level=1)
         result = execute_run(market, dict(run_stress=True, bootstrap_repetitions=2000), workspace / 'analysis')
         validation = validate_automated_result(result, target_as_of=target)
@@ -362,13 +461,14 @@ def run(workspace, baseline, candidate, source_commit, *, now=None, reuse_input_
         if findings:
             raise ValueError('Candidate publication failed secret scan')
         os.replace(staging, candidate)
-        status.update(state='validated', resultId=result['resultIdentity']['resultId'],
+        status.update(state='validated', finishedAtUtc=datetime.now(timezone.utc).isoformat(), resultId=result['resultIdentity']['resultId'],
                       dataAsOf=result['data']['asOf'], candidateHash=tree_hash(candidate),
                       candidate=str(candidate.resolve()), validation=validation)
         atomic_json(workspace / 'status.json', status)
         return status
     except Exception as exc:
-        status.update(state='failed', errorType=type(exc).__name__, reason=str(exc),
+        status.update(state='failed', finishedAtUtc=datetime.now(timezone.utc).isoformat(), errorType=type(exc).__name__, reason=str(exc),
+                      reasonCode=getattr(exc, 'code', 'refresh_failed'), missingSymbols=getattr(exc, 'symbols', []),
                       lastGoodPreserved=tree_hash(baseline) == before)
         atomic_json(workspace / 'status.json', status)
         if staging.exists():
@@ -417,6 +517,10 @@ def main(argv=None):
     diagnostics.add_argument('--symbols', default='')
     diagnostics.add_argument('--start', default='2015-01-01')
     diagnostics.add_argument('--end', default='2016-12-15')
+    ready = sub.add_parser('provider-ready')
+    ready.add_argument('--baseline', type=Path, required=True)
+    ready.add_argument('--output', type=Path, required=True)
+    ready.add_argument('--benchmarks-only', action='store_true')
     for name in ('run', 'promote'):
         command = sub.add_parser(name)
         command.add_argument('--workspace', type=Path, required=True)
@@ -435,6 +539,8 @@ def main(argv=None):
     elif args.command == 'export-input-diagnostics':
         print(json.dumps(export_input_diagnostics(args.reuse_input_root, args.output,
             symbols=args.symbols.split(',') if args.symbols else None, start=args.start, end=args.end)))
+    elif args.command == 'provider-ready':
+        print(json.dumps(provider_ready(args.baseline, args.output, benchmarks_only=args.benchmarks_only)))
     elif args.command == 'run':
         print(json.dumps(run(args.workspace, args.baseline, args.candidate, args.source_commit, reuse_input_root=args.reuse_input_root, archived_input_root=args.archived_input_root)))
     else:

@@ -182,9 +182,12 @@ def validate(site=ROOT / 'site'):
     manifest = json.loads((site / 'publication.json').read_text())
     assert manifest['schemaVersion'] in {'integrated-publication/v1', 'integrated-publication/v2'}
     assert manifest['status'] == 'passed'
+    from factor_lab.operational_status import RELATIVE_PATH, validate_file
+    validate_file(site)
     expected = manifest['files']
+    assert RELATIVE_PATH not in expected, 'Operational state must stay outside financial proof'
     observed = {p.relative_to(site).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
-                for p in site.rglob('*') if p.is_file() and p.name != 'publication.json'}
+                for p in site.rglob('*') if p.is_file() and p.name != 'publication.json' and p.relative_to(site).as_posix() != RELATIVE_PATH}
     assert observed == expected, 'Publication contains missing, changed or unreviewed files'
     result = json.loads((site / 'data/integrated-result.json').read_text())
     if manifest['schemaVersion'] == 'integrated-publication/v2':

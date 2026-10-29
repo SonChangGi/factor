@@ -332,7 +332,7 @@ def history_coverage_issue(data, symbol, reference):
 
 
 def collect_integrated_market(output_dir: Path, start="2010-01-01", end=None, symbols=None,
-                              *, reference_coverage=None, archived_input_root=None):
+                              *, reference_coverage=None, archived_input_root=None, target_session=None, required_target_symbols=()):
     """Download in bounded batches; a finished snapshot is never overwritten.
 
     Failed symbols remain explicit missing columns. No synthetic prices or
@@ -343,6 +343,15 @@ def collect_integrated_market(output_dir: Path, start="2010-01-01", end=None, sy
 
     from .integrated_listing import listing_context, provider_symbols, batch_cache_key, normalize_provider_columns
     reference_coverage = reference_coverage or {}
+    required_target_symbols = set(required_target_symbols)
+    def missing_target(frame, symbol):
+        if target_session is None or symbol not in required_target_symbols:
+            return False
+        day = pd.Timestamp(target_session)
+        return (day not in frame.index or ('Adj Close', symbol) not in frame or
+                ('Volume', symbol) not in frame or pd.isna(frame.at[day, ('Adj Close', symbol)]) or
+                frame.at[day, ('Adj Close', symbol)] <= 0 or
+                pd.isna(frame.at[day, ('Volume', symbol)]) or frame.at[day, ('Volume', symbol)] <= 0)
     root = Path(output_dir)
     if (root / "manifest.json").exists():
         existing = load_integrated_market(root)
@@ -409,6 +418,7 @@ def collect_integrated_market(output_dir: Path, start="2010-01-01", end=None, sy
     }
     collected = {k: {} for k in mapping}
     failures = {}
+    target_failures = {}
     receipts = []
     archive_symbols = set()
     for offset in range(0, len(all_symbols), 25):
@@ -472,12 +482,15 @@ def collect_integrated_market(output_dir: Path, start="2010-01-01", end=None, sy
         for symbol in batch:
             issue = history_coverage_issue(data, symbol, reference_coverage)
             missing = (('Adj Close', symbol) not in data or data[('Adj Close', symbol)].dropna().empty)
-            if missing or issue:
+            latest_missing = missing_target(data, symbol)
+            if missing or issue or latest_missing:
                 # Retry incomplete histories as well as wholly empty columns.
                 # Keep the original batch and each rejected response immutable.
                 stem = 'single-' + (hashlib.sha256(symbol.encode()).hexdigest()[:16] if expected_providers[symbol] == symbol else batch_cache_key([symbol], context))
                 if issue:
                     stem += '-coverage'
+                if latest_missing:
+                    stem += '-target-' + target_session
                 single_path = cache / (stem + '.csv.gz')
                 single_receipt = single_path.with_suffix('.json')
                 single = None
@@ -489,7 +502,7 @@ def collect_integrated_market(output_dir: Path, start="2010-01-01", end=None, sy
                     if single_info.get('providerSymbols', {symbol: symbol}) != {symbol: expected_providers[symbol]}:
                         raise ValueError('Cached single-symbol provider identity differs')
                     candidate = normalize_provider_columns(candidate, [symbol], context)
-                    if not history_coverage_issue(candidate, symbol, reference_coverage):
+                    if not history_coverage_issue(candidate, symbol, reference_coverage) and not missing_target(candidate, symbol):
                         single = candidate
                 if single is None:
                     for attempt in range(2):
@@ -515,13 +528,17 @@ def collect_integrated_market(output_dir: Path, start="2010-01-01", end=None, sy
                             single_info = dict(symbols=[symbol], providerSymbols={symbol: expected_providers[symbol]},
                                 listingVersion=context['version'], listingSourceHash=context['sourceHash'], retrievedAt=datetime.now(timezone.utc).isoformat(),
                                 sha256=_hash(single_path), retryOf=key,
-                                retryReason=issue or 'missing_adjusted_price')
+                                retryReason=issue or ('missing_target_session' if latest_missing else 'missing_adjusted_price'))
                             bad = history_coverage_issue(candidate, symbol, reference_coverage)
                             if bad:
                                 single_info['rejectedCoverage'] = bad
+                            if missing_target(candidate, symbol):
+                                single_info['rejectedTargetSession'] = target_session
                             single_receipt.write_text(json.dumps(single_info, indent=2) + '\n')
                             if bad:
                                 raise ValueError('Truncated positive-volume history after single-symbol retry')
+                            if missing_target(candidate, symbol):
+                                raise ValueError('Missing target-session quote after single-symbol retry')
                             single = candidate
                             break
                         except Exception as exc:
@@ -529,6 +546,8 @@ def collect_integrated_market(output_dir: Path, start="2010-01-01", end=None, sy
                             if attempt == 0:
                                 time.sleep(1)
                 if single is None:
+                    if latest_missing:
+                        target_failures[symbol] = dict(code='target_session_quote_unavailable', date=target_session, attempts=2)
                     if issue:
                         failure = dict(symbol=symbol, issue=issue, error=failures.get(symbol))
                         (root / 'history-coverage-failure.json').write_text(json.dumps(failure, indent=2)+'\n')
@@ -536,7 +555,12 @@ def collect_integrated_market(output_dir: Path, start="2010-01-01", end=None, sy
                             archive_symbols.add(symbol)
                             continue
                         raise ValueError(f'Truncated historical input remains after bounded retry: {symbol}')
-                    continue
+                    if latest_missing and not missing:
+                        # Preserve the complete original vintage. A missing new
+                        # quote remains absent until reviewed evidence admits it.
+                        single, single_info = data, {**info, 'symbols': [symbol], 'role': 'target_session_unavailable_original_batch_preserved'}
+                    else:
+                        continue
                 failures.pop(symbol, None)
                 receipts.append(single_info)
                 source = single
@@ -596,6 +620,12 @@ def collect_integrated_market(output_dir: Path, start="2010-01-01", end=None, sy
             'asOf': str(output_calendar[-1].date()),
             'basis': 'positive_adjusted_close_and_positive_provider_volume'}
             for symbol in requested},
+        "targetSession": target_session,
+        "requiredTargetSymbols": sorted(required_target_symbols),
+        "sourceTargetFailures": target_failures,
+        "targetSessionMissingSymbols": [symbol for symbol in all_symbols if symbol in required_target_symbols and target_session is not None and
+            (pd.Timestamp(target_session) not in frames['prices'].index or
+             pd.isna(frames['prices'].at[pd.Timestamp(target_session), symbol]))],
         "inputCoverageReferenceHash": hashlib.sha256(json.dumps(reference_coverage, sort_keys=True).encode()).hexdigest(),
         "priceBasis": "Yahoo Adj Close: split and dividend adjusted; no separate dividend reinvestment",
         "ohlcvBasis": "Yahoo auto_adjust=False OHLC and volume; provider split-adjusted basis, not independently reconstructed as-traded observations",

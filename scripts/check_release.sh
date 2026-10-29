@@ -5,6 +5,7 @@ export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 VECLIB_MAXIMUM
 python scripts/release_preflight.py --mode release
 python -m pytest -q \
   tests/test_actions_pinning.py \
+  tests/test_operational_status.py \
   tests/test_release_preflight.py \
   tests/test_actions_outcome.py \
   tests/test_actions_source_race.py \

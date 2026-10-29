@@ -18,6 +18,7 @@ def test_pages_failure_cannot_be_hidden_by_existing_site_health():
 @pytest.mark.parametrize("override,expected", [
     ({}, 0),
     ({"UPDATE_RESULT": "failure"}, 1),
+    ({"STATUS_RESULT": "failure"}, 1),
     ({"UPDATE_RESULT": "cancelled"}, 1),
     ({"SHOULD_DEPLOY": "false"}, 1),
     ({"DEPLOY_RESULT": "failure"}, 1),
@@ -31,7 +32,7 @@ def test_workflow_never_treats_page_reachability_as_a_successful_refresh(overrid
     final_job = workflow.split("  refresh-result:\n", 1)[1].split("  input-cache-diagnostics:\n", 1)[0]
     script = textwrap.dedent(final_job.split("        run: |\n", 1)[1])
     environment = {**os.environ, "UPDATE_RESULT": "success", "REFRESH_SKIPPED": "false",
-                   "DEPLOY_RESULT": "success", "SHOULD_DEPLOY": "true", **override}
+                   "DEPLOY_RESULT": "success", "SHOULD_DEPLOY": "true", "STATUS_RESULT": "success", **override}
     result = subprocess.run(["bash", "-e", "-c", script], env=environment, capture_output=True)
     assert result.returncode == expected, result.stdout + result.stderr
 
@@ -57,3 +58,21 @@ def test_financial_calculation_and_input_diagnostics_pin_the_runner_os():
         body = re.split(r"(?m)^  [a-z][a-z-]*:\s*$", workflow.split("  " + job + ":\n", 1)[1], maxsplit=1)[0]
         assert "    runs-on: ubuntu-24.04" in body
         assert "ubuntu-latest" not in body
+
+
+def test_failed_calculation_still_publishes_status_but_remains_a_failed_refresh():
+    workflow = Path('.github/workflows/daily-dashboard.yml').read_text()
+    status_job = workflow.split('  publish-refresh-status:\n', 1)[1].split('  refresh-result:\n', 1)[0]
+    assert 'if: always()' in status_job
+    assert 'needs: [admission, update-dashboard, request-pages-deployment]' in workflow
+    assert 'scripts/publish_refresh_status.py' in status_job
+    assert 'Deploy and verify operational state even when calculation failed' in status_job
+    assert 'expected_source_sha="${SOURCE_SHA}"' in status_job
+    assert 'needs: [update-dashboard, request-pages-deployment, publish-refresh-status]' in workflow
+
+
+def test_watchdog_does_not_probe_or_write_stale_state_during_an_active_calculation():
+    workflow = Path('.github/workflows/daily-dashboard-watchdog.yml').read_text()
+    readiness = workflow.split('      - name: Wait for bounded benchmark provider readiness\n', 1)[1].split('      - name:', 1)[0]
+    assert "steps.active.outputs.count == '0'" in readiness
+    assert workflow.index('Check for an active refresh before provider probing') < workflow.index('Wait for bounded benchmark provider readiness')

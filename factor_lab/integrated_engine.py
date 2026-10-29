@@ -221,10 +221,28 @@ def _monthly_candidate(result, date, allocation, price_changes, window, observed
             status="data_error", reason="incomplete_nav", metrics={},
             dataIssue=_candidate_data_issue(result, returns, observed_prices),
         )
+    if allocation.status != "available":
+        target_reasons = list(allocation.reasons)
+        # No eligible signal can be a normal history/coverage shortage.
+        # Calculation/invariant failures and lost policy inputs must not be
+        # mistaken for risk rejection and trigger a new cash allocation.
+        normal_shortage = (
+            allocation.status == "unavailable"
+            and target_reasons == ["no_complete_signal_inputs"]
+        )
+        return dict(
+            status="insufficient_data" if normal_shortage else "data_error",
+            reason="incomplete_nav_or_target" if normal_shortage else "target_allocation_failed",
+            metrics={},
+            allocationIssue=dict(
+                status=allocation.status,
+                reasons=target_reasons,
+                componentStatus=dict(allocation.component_status),
+            ),
+        )
     if (
         len(returns) != window
         or not np.isfinite(returns).all()
-        or allocation.status != "available"
         or allocation.rows.empty
     ):
         return dict(status="insufficient_data", reason="incomplete_nav_or_target", metrics={})
@@ -588,7 +606,7 @@ def run_integrated_analysis(market, config=None, factors=None, *, progress_callb
     settings = asdict(config)
     identity = dict(
         snapshotId=market.metadata.get("snapshotId"), settings=settings, definitions=definitions,
-        engineVersion="integrated-accounting-v4",
+        engineVersion="integrated-accounting-v5",
     )
     digest = hashlib.sha256(json.dumps(clean(identity), sort_keys=True).encode()).hexdigest()
     output = dict(
@@ -611,7 +629,7 @@ def run_integrated_analysis(market, config=None, factors=None, *, progress_callb
             resultId=digest[:20],
             inputHash=market.metadata.get("snapshotId"),
             registryVersion="integrated-32-v1",
-            engineVersion="integrated-accounting-v4",
+            engineVersion="integrated-accounting-v5",
         ),
         generatedAt=datetime.now(timezone.utc).isoformat(),
     )

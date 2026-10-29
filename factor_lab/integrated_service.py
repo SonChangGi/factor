@@ -128,6 +128,8 @@ def data_inventory(market):
     exchanges = {r['symbol']: r for r in market.metadata.get('corporateActions', [])}
     alternate = {r['symbol']: r for r in market.metadata.get('amendments', [])
                  if r['kind'] == 'observed_quote'}
+    current_alternative = {r['symbol'] for r in market.metadata.get('amendments', [])
+                           if r['kind'] == 'observed_quote' and r['date'] == str(market.prices.index[-1].date())}
     observed = market.prices.notna() & market.prices.gt(0)
     volume_ok = market.volumes.notna() & market.volumes.gt(0)
     dollar_volume = (market.raw_close * market.volumes).where(volume_ok)
@@ -153,6 +155,13 @@ def data_inventory(market):
         observations = market.prices[symbol].dropna()
         eligible = bool(market.eligibility[symbol].iloc[-1])
         failure = market.metadata.get('failedSymbols', {}).get(symbol)
+        source_failure = market.metadata.get('sourceTargetFailures', {}).get(symbol)
+        if source_failure and source_failure.get('date') == str(market.prices.index[-1].date()):
+            failure = failure or '목표 거래일 공급자 종가 없음'
+        current_quote = (bool(observed.iloc[-1][symbol]) and bool(volume_ok.iloc[-1][symbol])
+                         and market.raw_close.iloc[-1][symbol] > 0)
+        if symbol in current_alternative and current_quote:
+            failure = None
         reasons = [label for label, passed in checks.items() if not bool(passed[symbol])]
         if symbol in quarantines:
             failure = None
@@ -166,6 +175,7 @@ def data_inventory(market):
         if symbol in alternate:
             provenance += ' · ' + alternate[symbol]['sourceUrl'].split('/')[2]
         rows.append({**source, 'symbol': symbol, 'source': provenance,
+                     **({'sourceFailure': source_failure} if source_failure else {}),
                      'observedAt': str(observations.index[-1].date()) if len(observations) else None,
                      'firstObservation': str(observations.index[0].date()) if len(observations) else None,
                      'collectedAt': collected.get(symbol), 'observations': len(observations),
@@ -223,6 +233,11 @@ def execute_run(market, settings, directory, comparison_factors=None, common_uni
 def build_site(directory, result):
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=True)
+    operational = directory / 'data/refresh-status.json'
+    if operational.exists():
+        prior = json.loads(operational.read_text())
+        if prior.get('lastGood', {}).get('resultId') != result.get('resultIdentity', {}).get('resultId'):
+            operational.unlink()
     web = Path(__file__).parent / 'web'
     (directory / 'assets').mkdir(exist_ok=True)
     for source, target in [('integrated.html', 'index.html'), ('integrated.css', 'assets/integrated.css'), ('integrated.js', 'assets/integrated.js'), ('integrated_charts.js', 'assets/integrated_charts.js'), ('styles.css', 'assets/styles.css'), ('shared-nav.css', 'assets/shared-nav.css')]:

@@ -25,6 +25,9 @@ env:
 
 jobs:
   dispatch-if-stale:
+    permissions:
+      contents: write
+      actions: write
     runs-on: ubuntu-latest
     timeout-minutes: 50
     steps:
@@ -49,7 +52,7 @@ jobs:
       - name: Install integrated trading-session freshness checker
         run: |
           python -m pip install uv==0.11.17
-          uv sync --frozen --python "$(command -v python)"
+          uv sync --frozen --extra live --python "$(command -v python)"
           echo "${GITHUB_WORKSPACE}/.venv/bin" >> "$GITHUB_PATH"
 
       - name: Decide whether dashboard is stale
@@ -61,7 +64,26 @@ jobs:
             --event-name "${DASHBOARD_FRESHNESS_EVENT_NAME}" \
             --site site >> "$GITHUB_OUTPUT"
 
+      - name: Check for an active refresh before provider probing
+        id: active
+        if: steps.freshness.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          count="$(gh run list --repo "${GITHUB_REPOSITORY}" --workflow daily-dashboard.yml \
+            --branch "${DEFAULT_BRANCH:-main}" --limit 100 --json status \
+            --jq '[.[] | select(.status != "completed")] | length')"
+          echo "count=${count}" >> "$GITHUB_OUTPUT"
+      - name: Wait for bounded benchmark provider readiness
+        id: readiness
+        if: steps.freshness.outputs.skip != 'true' && steps.active.outputs.count == '0'
+        run: |
+          python -m factor_lab.integrated_automation provider-ready --baseline site --benchmarks-only \
+            --output "${RUNNER_TEMP}/watchdog-readiness"
+
       - name: Dispatch daily dashboard workflow
+        id: dispatch
         if: steps.freshness.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -82,6 +104,35 @@ jobs:
             --repo "${GITHUB_REPOSITORY}" \
             --ref "${DEFAULT_BRANCH:-main}" \
             -f watchdog_origin=true
+
+      - name: Publish delayed provider state without replacing financial data
+        if: always() && steps.freshness.outputs.skip != 'true' && (steps.readiness.outcome == 'failure' || steps.dispatch.outcome == 'failure')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          TARGET_DATA_AS_OF: ${{ steps.freshness.outputs.target_data_as_of }}
+        run: |
+          set -euo pipefail
+          started_at="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" --jq .created_at)"
+          python scripts/publish_refresh_status.py --repository . --branch "${DEFAULT_BRANCH}" \
+            --status-directory "${RUNNER_TEMP}/watchdog-readiness" --run-id "${GITHUB_RUN_ID}" \
+            --run-attempt "${GITHUB_RUN_ATTEMPT}" --source-commit "$(git rev-parse HEAD)" \
+            --target "${TARGET_DATA_AS_OF}" --started-at "${started_at}" --outcome failure > "${RUNNER_TEMP}/status-outputs"
+          source_sha="$(sed -n 's/^source_sha=//p' "${RUNNER_TEMP}/status-outputs")"
+          [[ "$(sed -n 's/^should_deploy=//p' "${RUNNER_TEMP}/status-outputs")" == true ]] || exit 0
+          dispatched_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          gh workflow run deploy-pages.yml --repo "${GITHUB_REPOSITORY}" --ref "${DEFAULT_BRANCH}" \
+            -f expected_source_sha="${source_sha}" -f request_origin=watchdog-refresh-status
+          deployment_run=""
+          for attempt in {1..12}; do
+            deployment_run="$(gh run list --repo "${GITHUB_REPOSITORY}" --workflow deploy-pages.yml \
+              --event workflow_dispatch --commit "${source_sha}" --limit 10 --json databaseId,createdAt \
+              --jq ".[] | select(.createdAt >= \"${dispatched_at}\") | .databaseId" | head -n 1)"
+            [[ -n "${deployment_run}" ]] && break
+            sleep 5
+          done
+          [[ -n "${deployment_run}" ]] || { echo "Watchdog operational-state Pages run not found." >&2; exit 1; }
+          timeout 2100s gh run watch "${deployment_run}" --repo "${GITHUB_REPOSITORY}" --interval 10 --exit-status
 
       - name: Recover publication when repository data is already fresh
         if: steps.freshness.outputs.skip == 'true'

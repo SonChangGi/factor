@@ -20,6 +20,8 @@ def build(output, site=None, legacy=None, source_sha=None):
     if output.exists():
         raise FileExistsError('Choose an empty publication directory')
     shutil.copytree(site, output, symlinks=False)
+    from factor_lab.operational_status import validate_file
+    validate_file(output)
     files = {}
     for path in sorted(legacy.rglob('*')):
         if path.is_symlink():
@@ -39,6 +41,8 @@ def build(output, site=None, legacy=None, source_sha=None):
         'sourceCommit': source_sha or subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(),
         'integratedResult': 'data/integrated-result.json',
         'integratedRefresh': 'separate_reviewed_snapshot',
+        'currentOperationalStatus': {'path': 'data/refresh-status.json', 'contract': 'factor-refresh-status/v1'},
+        'legacyAutomationStatusRole': 'historical_momentum_v1_not_current_status',
         'files': files,
     }
     (output / 'legacy-publication.json').write_text(json.dumps(manifest, ensure_ascii=False, sort_keys=True, separators=(',', ':')))

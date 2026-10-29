@@ -1,0 +1,206 @@
+{
+  "schemaVersion": "hubb-20261028-evidence/v1",
+  "nasdaqResponse": {
+    "data": {
+      "symbol": "HUBB",
+      "totalRecords": 3,
+      "tradesTable": {
+        "asOf": null,
+        "headers": {
+          "date": "Date",
+          "close": "Close/Last",
+          "volume": "Volume",
+          "open": "Open",
+          "high": "High",
+          "low": "Low"
+        },
+        "rows": [
+          {
+            "date": "10/28/2026",
+            "close": "$437.33",
+            "volume": "1,163,860",
+            "open": "$444.68",
+            "high": "$444.805",
+            "low": "$426.91"
+          },
+          {
+            "date": "10/27/2026",
+            "close": "$434.28",
+            "volume": "1,820,811",
+            "open": "$430.64",
+            "high": "$444.67",
+            "low": "$429.3655"
+          },
+          {
+            "date": "10/26/2026",
+            "close": "$459.40",
+            "volume": "827,946",
+            "open": "$452.38",
+            "high": "$463.215",
+            "low": "$451.48"
+          }
+        ]
+      }
+    },
+    "message": null,
+    "status": {
+      "rCode": 200,
+      "bCodeMessage": null,
+      "developerMessage": null
+    }
+  },
+  "nasdaqResponseSha256": "90f079132d4017e66b411289f14058a2ee7ea13862efff56318d7dd18491f78e",
+  "yahooResponse": {
+    "chart": {
+      "result": [
+        {
+          "meta": {
+            "currency": "USD",
+            "symbol": "HUBB",
+            "exchangeName": "NYQ",
+            "fullExchangeName": "NYSE",
+            "instrumentType": "EQUITY",
+            "firstTradeDate": 76599000,
+            "regularMarketTime": 1793217602,
+            "hasPrePostMarketData": true,
+            "gmtoffset": -14400,
+            "timezone": "EDT",
+            "exchangeTimezoneName": "America/New_York",
+            "regularMarketPrice": 437.33,
+            "regularMarketChangePercent": 0.702,
+            "fulldayPrice": 438.83,
+            "fulldayChange": 4.55,
+            "fulldayChangePercent": 1.048,
+            "fiftyTwoWeekHigh": 565.5,
+            "fiftyTwoWeekLow": 403.82,
+            "regularMarketDayHigh": 444.055,
+            "regularMarketDayLow": 426.91,
+            "regularMarketVolume": 1163816,
+            "longName": "Hubbell Incorporated",
+            "shortName": "Hubbell Inc",
+            "chartPreviousClose": 448.1,
+            "priceHint": 2,
+            "currentTradingPeriod": {
+              "pre": {
+                "timezone": "EDT",
+                "start": 1793260800,
+                "end": 1793280600,
+                "gmtoffset": -14400
+              },
+              "regular": {
+                "timezone": "EDT",
+                "start": 1793280600,
+                "end": 1793304000,
+                "gmtoffset": -14400
+              },
+              "post": {
+                "timezone": "EDT",
+                "start": 1793304000,
+                "end": 1793318400,
+                "gmtoffset": -14400
+              }
+            },
+            "dataGranularity": "1d",
+            "range": "",
+            "validRanges": [
+              "1d",
+              "5d",
+              "1mo",
+              "3mo",
+              "6mo",
+              "1y",
+              "2y",
+              "5y",
+              "10y",
+              "ytd",
+              "max"
+            ]
+          },
+          "timestamp": [
+            1793021400,
+            1793107800,
+            1793194200
+          ],
+          "indicators": {
+            "quote": [
+              {
+                "close": [
+                  459.3999938964844,
+                  434.2799987792969,
+                  null
+                ],
+                "low": [
+                  451.4800109863281,
+                  429.3655090332031,
+                  426.9100036621094
+                ],
+                "volume": [
+                  827947,
+                  1820595,
+                  1163816
+                ],
+                "open": [
+                  452.3800048828125,
+                  430.6400146484375,
+                  444.67999267578125
+                ],
+                "high": [
+                  463.2149963378906,
+                  444.6700134277344,
+                  444.05499267578125
+                ]
+              }
+            ],
+            "adjclose": [
+              {
+                "adjclose": [
+                  459.3999938964844,
+                  434.2799987792969,
+                  null
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "error": null
+    }
+  },
+  "stockAnalysisObservation": {
+    "sourceUrl": "https://stockanalysis.com/stocks/hubb/history/",
+    "date": "2026-10-28",
+    "open": 444.68,
+    "high": 444.81,
+    "low": 426.91,
+    "close": 437.33,
+    "adjustedClose": 437.33,
+    "volume": 1163822,
+    "basis": "S&P Global Market Intelligence historical daily table; observed via web source, not downloaded directly (HTTP403). Numeric evidence only.",
+    "retrievedAt": "2026-10-29T07:15:20.435351+00:00"
+  },
+  "issuerDividendNotice": {
+    "url": "https://rss.globenewswire.com/news-release/2026/10/23/3387522/0/en/hubbell-incorporated-declares-a-7-dividend-increase.html",
+    "announcedDate": "2026-10-23",
+    "recordDate": "2026-11-30",
+    "paymentDate": "2026-12-15"
+  },
+  "policyQuote": {
+    "symbol": "HUBB",
+    "date": "2026-10-28",
+    "open": 444.68,
+    "high": 444.805,
+    "low": 426.91,
+    "close": 437.33,
+    "adjustedClose": 437.33,
+    "volume": 1163860,
+    "sourceUrl": "https://api.nasdaq.com/api/quote/HUBB/historical?assetclass=stocks&fromdate=2026-10-26&todate=2026-10-28&limit=10",
+    "confirmationSourceUrl": "https://stockanalysis.com/stocks/hubb/history/",
+    "retrievedAt": "2026-10-29T07:15:20.435351+00:00",
+    "basis": "Nasdaq historical consolidated daily USD OHLCV, NYSE HUBB common stock. S&P Global historical table via StockAnalysis confirms close=adjusted close=437.33 for 2026-10-28; Yahoo regular-market metadata at 16:00:02 EDT independently agrees. Whole bar replaces missing daily close and contradictory Yahoo high, with no field mixing or price inference. No split/dividend on this session.",
+    "closePrecision": {
+      "kind": "decimal",
+      "places": 2
+    },
+    "evidenceSha256": "90f079132d4017e66b411289f14058a2ee7ea13862efff56318d7dd18491f78e"
+  }
+}

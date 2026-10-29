@@ -20,7 +20,10 @@ function bind({charts, root, palette, finite, fmt, linePath, chartTicks, endpoin
     const indexes = new Map(dates.map((date, index) => [date, index]));
     const points = chart.series.map(series => new Map(series.points.map(point => [point.date, point.value])));
     const enabled = chart.series.map(() => true);
-    let position = dates.length - 1, pinned = false, activeTouch = null;
+    let position = dates.length - 1, pinned = false, activeTouch = null, scale = 'linear';
+    const plottable = value => finite(value) && (scale !== 'log' || value > -1);
+    const transform = value => scale === 'log' ? Math.log1p(value) : value;
+    const inverse = value => scale === 'log' ? Math.expm1(value) : value;
     let width = 900, height = chart.compact ? 150 : 300, y, observation;
     const L = 58, R = 16, T = 24, B = 28;
     const color = index => palette[index % palette.length];
@@ -34,7 +37,7 @@ function bind({charts, root, palette, finite, fmt, linePath, chartTicks, endpoin
       const visible = chart.series.flatMap((series, index) => {
         if (!enabled[index]) return [];
         const value = points[index].get(date);
-        return [{index, series, value, y: finite(value) ? y(value) : labelMax}];
+        return [{index, series, value, y: plottable(value) ? y(value) : labelMax}];
       });
       const gap = Math.min(font + 7, (labelMax - labelMin) / Math.max(1, visible.length - 1));
       const labels = endpointPositions(visible, labelMin, labelMax, gap);
@@ -61,7 +64,7 @@ function bind({charts, root, palette, finite, fmt, linePath, chartTicks, endpoin
         const preferRight = cursorX + labelWidth + 14 <= width - R;
         const labelX = Math.max(L + 2, Math.min(width - R - labelWidth - 2, preferRight ? cursorX + 12 : cursorX - labelWidth - 12));
         const textX = labelX + 6, labelHeight = font + 5;
-        if (finite(value)) {
+        if (plottable(value)) {
           const pointY = y(value), edge = preferRight ? labelX : labelX + labelWidth;
           output += `<line class="observation-leader" x1="${cursorX}" y1="${pointY}" x2="${edge}" y2="${item.y}" stroke="${color(index)}" stroke-width=".8" opacity=".55"/>`;
           output += `<circle class="dot" data-series="${index}" cx="${cursorX}" cy="${pointY}" r="4" fill="${color(index)}"/>`;
@@ -100,13 +103,14 @@ function bind({charts, root, palette, finite, fmt, linePath, chartTicks, endpoin
       let lo = 0, hi = 0;
       chart.series.forEach((series, index) => {
         if (enabled[index]) for (const point of series.points) {
-          if (finite(point.value)) { lo = Math.min(lo,point.value); hi = Math.max(hi,point.value); }
+          if (plottable(point.value)) { const value = transform(point.value); lo = Math.min(lo,value); hi = Math.max(hi,value); }
         }
       });
       if (lo === hi) { lo -= .01; hi += .01; }
-      y = value => T + (hi-value)/(hi-lo)*(height-T-B);
+      y = value => T + (hi-transform(value))/(hi-lo)*(height-T-B);
       let output = '';
-      for (const value of chartTicks(lo,hi,chart.compact?4:5)) {
+      for (const tick of chartTicks(lo,hi,chart.compact?4:5)) {
+        const value = inverse(tick);
         const label = chart.kind === 'pct' ? `${(Math.abs(value)<1e-10?0:value*100).toLocaleString('ko-KR',{maximumFractionDigits:Math.abs(hi-lo)>=.1?0:2})}%` : fmt(value);
         output += `<line class="grid ${value===0?'zero':''}" x1="${L}" x2="${width-R}" y1="${y(value)}" y2="${y(value)}"/><text x="${L-8}" y="${y(value)+4}" text-anchor="end">${escape(label)}</text>`;
       }
@@ -116,10 +120,11 @@ function bind({charts, root, palette, finite, fmt, linePath, chartTicks, endpoin
         output += `<text x="${x(date)}" y="${height-6}" text-anchor="middle">${escape(date.slice(0,7))}</text>`;
       }
       chart.series.forEach((series,index) => {
-        if (enabled[index]) output += `<path class="trace" stroke="${color(index)}" d="${linePath(series.points,x,y)}"/>`;
+        if (enabled[index]) output += `<path class="trace" stroke="${color(index)}" d="${linePath(dates.map(date => {const value=points[index].get(date);return {date,value:plottable(value)?value:null};}),x,y)}"/>`;
       });
       svg.innerHTML = `<g class="chart-plot">${output}</g><g class="chart-observation" style="pointer-events:none"></g>`;
       observation = svg.querySelector('.chart-observation');
+      box.dataset.chartScale = scale;
       updateObservation();
     }
 
@@ -166,6 +171,13 @@ function bind({charts, root, palette, finite, fmt, linePath, chartTicks, endpoin
       if (!Number.isInteger(index) || index < 0 || index >= enabled.length) return;
       enabled[index] = !enabled[index];
       button.setAttribute('aria-pressed',String(enabled[index]));
+      draw();
+    });
+    const scaleControl = box.querySelector('[data-chart-scale]');
+    if (chart.wealth && scaleControl) listen(scaleControl,'change',() => {
+      scale = scaleControl.value === 'log' ? 'log' : 'linear';
+      const note = box.querySelector('[data-scale-note]');
+      if (note) note.hidden = scale !== 'log';
       draw();
     });
     if (window?.ResizeObserver) {

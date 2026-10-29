@@ -177,7 +177,7 @@ def test_stale_repository_still_requests_the_collector() -> None:
 def test_watchdog_does_not_duplicate_an_active_collection(tmp_path, active, expected_dispatch):
     workflow = (ROOT / '.github/workflows/daily-dashboard-watchdog.yml').read_text()
     block = workflow.split('      - name: Dispatch daily dashboard workflow\n', 1)[1].split(
-        '      - name: Recover publication', 1)[0]
+        '      - name: Publish delayed provider state', 1)[0]
     script = textwrap.dedent(block.split('        run: |\n', 1)[1])
     for key in ('reason', 'latest_data_as_of', 'target_data_as_of'):
         script = script.replace('${{ steps.freshness.outputs.' + key + ' }}', 'stale')

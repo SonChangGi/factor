@@ -27,11 +27,13 @@ def inventory(site):
     site = Path(site)
     if site.is_symlink():
         raise ValueError('Publication root cannot be a symbolic link')
+    from factor_lab.operational_status import RELATIVE_PATH, validate_file
+    validate_file(site)
     files = {}
     for path in sorted(site.rglob('*')):
         if path.is_symlink():
             raise ValueError(f'Publication contains a symbolic link: {path.relative_to(site)}')
-        if path.is_file() and path != site / 'publication.json':
+        if path.is_file() and path != site / 'publication.json' and path.relative_to(site).as_posix() != RELATIVE_PATH:
             files[path.relative_to(site).as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
     return files
 

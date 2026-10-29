@@ -82,6 +82,8 @@ jobs:
       source_sha: ${{ steps.publish.outputs.source_sha }}
       should_deploy: ${{ steps.publish.outputs.should_deploy }}
       refresh_skipped: ${{ steps.freshness.outputs.skip }}
+      calculation_source_sha: ${{ steps.source.outputs.sha }}
+      target_data_as_of: ${{ steps.freshness.outputs.target_data_as_of }}
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
         with:
@@ -126,6 +128,13 @@ jobs:
         run: |
           python scripts/release_preflight.py --mode daily
           python -m pytest -q tests/test_integrated_automation.py::test_fresh_spy_does_not_hide_widespread_stale_equities
+
+      - name: Wait for bounded provider readiness before full collection
+        id: readiness
+        if: steps.freshness.outputs.skip != 'true'
+        run: |
+          python -m factor_lab.integrated_automation provider-ready --baseline site \
+            --output "outputs/factor-daily/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}/provider-readiness"
 
       - name: Resolve the explicitly requested immutable input cache
         id: reuse
@@ -266,6 +275,17 @@ jobs:
           else
             echo "Refresh skipped: ${{ steps.freshness.outputs.skip }}; target close: ${{ steps.freshness.outputs.target_data_as_of }}" >> "$GITHUB_STEP_SUMMARY"
           fi
+      - name: Preserve the small operational attempt independently
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: factor-attempt-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 3
+          if-no-files-found: ignore
+          path: |
+            outputs/factor-daily/${{ github.run_id }}-${{ github.run_attempt }}/status.json
+            outputs/factor-daily/${{ github.run_id }}-${{ github.run_attempt }}/provider-readiness/status.json
+
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always() && steps.freshness.outputs.skip != 'true'
         with:
@@ -313,19 +333,83 @@ jobs:
           [[ -n "${deployment_run}" ]] || { echo "Exact-source Pages run not found." >&2; exit 1; }
           timeout 2100s gh run watch "${deployment_run}" --repo "${GITHUB_REPOSITORY}" --interval 10 --exit-status
 
+  publish-refresh-status:
+    needs: [admission, update-dashboard, request-pages-deployment]
+    if: always() && inputs.diagnostics_only != true && github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+      - name: Recover the small attempt receipt
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "${RUNNER_TEMP}/factor-attempt"
+          gh run download "${GITHUB_RUN_ID}" --repo "${GITHUB_REPOSITORY}" \
+            --name "factor-attempt-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --dir "${RUNNER_TEMP}/factor-attempt" || \
+            echo "No attempt receipt was created before the earlier setup failure or fresh-data skip."
+      - name: Publish only result-bound operational state with compare-and-swap
+        id: state
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          UPDATE_RESULT: ${{ needs.update-dashboard.result }}
+          DEPLOY_RESULT: ${{ needs.request-pages-deployment.result }}
+          CALCULATION_SOURCE: ${{ needs.update-dashboard.outputs.calculation_source_sha || github.sha }}
+          TARGET_DATA_AS_OF: ${{ needs.update-dashboard.outputs.target_data_as_of }}
+        run: |
+          set -euo pipefail
+          started_at="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" --jq .created_at)"
+          python scripts/publish_refresh_status.py --repository . \
+            --status-directory "${RUNNER_TEMP}/factor-attempt" --run-id "${GITHUB_RUN_ID}" \
+            --run-attempt "${GITHUB_RUN_ATTEMPT}" --source-commit "${CALCULATION_SOURCE}" \
+            --target "${TARGET_DATA_AS_OF}" --started-at "${started_at}" \
+            --outcome "${UPDATE_RESULT}" --deployment-outcome "${DEPLOY_RESULT}" \
+            --branch "${DEFAULT_BRANCH}" >> "$GITHUB_OUTPUT"
+      - name: Deploy and verify operational state even when calculation failed
+        if: steps.state.outputs.should_deploy == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ steps.state.outputs.source_sha }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          dispatched_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          gh workflow run deploy-pages.yml --repo "${GITHUB_REPOSITORY}" --ref "${DEFAULT_BRANCH}" \
+            -f expected_source_sha="${SOURCE_SHA}" -f request_origin=daily-refresh-status
+          deployment_run=""
+          for attempt in {1..12}; do
+            deployment_run="$(gh run list --repo "${GITHUB_REPOSITORY}" --workflow deploy-pages.yml \
+              --event workflow_dispatch --commit "${SOURCE_SHA}" --limit 10 --json databaseId,createdAt \
+              --jq ".[] | select(.createdAt >= \"${dispatched_at}\") | .databaseId" | head -n 1)"
+            [[ -n "${deployment_run}" ]] && break
+            sleep 5
+          done
+          [[ -n "${deployment_run}" ]] || { echo "Operational-state Pages run not found." >&2; exit 1; }
+          timeout 2100s gh run watch "${deployment_run}" --repo "${GITHUB_REPOSITORY}" --interval 10 --exit-status
+
   refresh-result:
-    needs: [update-dashboard, request-pages-deployment]
+    needs: [update-dashboard, request-pages-deployment, publish-refresh-status]
     if: always() && inputs.diagnostics_only != true
     runs-on: ubuntu-latest
     steps:
       - name: Require successful validated refresh and exact-source deployment
         env:
+          STATUS_RESULT: ${{ needs.publish-refresh-status.result }}
           UPDATE_RESULT: ${{ needs.update-dashboard.result }}
           REFRESH_SKIPPED: ${{ needs.update-dashboard.outputs.refresh_skipped }}
           SHOULD_DEPLOY: ${{ needs.update-dashboard.outputs.should_deploy }}
           DEPLOY_RESULT: ${{ needs.request-pages-deployment.result }}
         run: |
           set -euo pipefail
+          [[ "${STATUS_RESULT}" == success ]] || exit 1
           [[ "${UPDATE_RESULT}" == success ]] || exit 1
           [[ "${REFRESH_SKIPPED}" != true ]] || exit 0
           [[ "${SHOULD_DEPLOY}" == true && "${DEPLOY_RESULT}" == success ]] || exit 1

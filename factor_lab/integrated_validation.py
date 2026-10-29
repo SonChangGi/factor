@@ -308,7 +308,7 @@ def write_automated_manifest(candidate, result, source_commit, validation, *, pu
         require(hashlib.sha256(body).hexdigest() == digest, 'Calculation source changed: ' + name)
     candidate = Path(candidate)
     files = {p.relative_to(candidate).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
-             for p in sorted(candidate.rglob('*')) if p.is_file() and p.name != 'publication.json'}
+             for p in sorted(candidate.rglob('*')) if p.is_file() and p.name != 'publication.json' and p.relative_to(candidate).as_posix() != 'data/refresh-status.json'}
     manifest = dict(schemaVersion='integrated-publication/v2', status='passed', publicationType=publication_type,
                     calculationSourceCommit=source_commit, calculationPackage=package,
                     calculationSourceUrl=f'https://github.com/SonChangGi/factor/tree/{source_commit}',
