@@ -269,3 +269,69 @@ def test_only_current_verified_full_bar_clears_failed_inventory_and_keeps_source
     assert row["reason"] == ""
     fixed.metadata["amendments"][0]["date"] = "2026-10-27"
     assert data_inventory(fixed)[0]["status"] == "failed"
+
+
+def test_real_workflow_probe_path_does_not_precreate_immutable_calculation_workspace(
+    tmp_path, monkeypatch
+):
+    """Run the actual declared layout through probe and runner initialization."""
+    from pathlib import Path
+    import re
+    import factor_lab.integrated_data as data
+
+    workflow = (
+        Path(__file__).resolve().parents[1] / ".github/workflows/daily-dashboard.yml"
+    ).read_text()
+    readiness_step = workflow.split(
+        "      - name: Wait for bounded provider readiness before full collection\n", 1
+    )[1].split("      - name:", 1)[0]
+    calculate_step = workflow.split(
+        "      - name: Collect, reconcile, calculate and validate the candidate\n", 1
+    )[1].split("      - name:", 1)[0]
+
+    def declared_path(step, argument):
+        literal = re.search(r"--" + argument + r' "([^"]+)"', step).group(1)
+        return tmp_path / literal.replace("${GITHUB_RUN_ID}", "40837055549").replace(
+            "${GITHUB_RUN_ATTEMPT}", "1"
+        )
+
+    probe = declared_path(readiness_step, "output")
+    workspace = declared_path(calculate_step, "workspace")
+    assert probe != workspace and workspace not in probe.parents
+    site, _ = _probe_site(tmp_path, monkeypatch)
+    original = json.loads((site / "data/integrated-result.json").read_text())
+    original["data"]["symbols"] = []
+    (site / "data/integrated-result.json").write_text(json.dumps(original))
+    automation.provider_ready(
+        site,
+        probe,
+        now=datetime(2026, 10, 29, 6, tzinfo=timezone.utc),
+        download=lambda symbols, **_: _provider(symbols),
+        sleep=lambda _: None,
+    )
+    assert (probe / "status.json").exists() and not workspace.exists()
+    monkeypatch.setattr(automation, "current_source", lambda: "source")
+
+    def collector(*args, **kwargs):
+        raise RuntimeError("reached collector after isolated readiness")
+
+    monkeypatch.setattr(data, "collect_integrated_market", collector)
+    with pytest.raises(RuntimeError, match="reached collector after isolated readiness"):
+        automation.run(
+            workspace,
+            site,
+            tmp_path / "candidate",
+            "source",
+            now=datetime(2026, 10, 29, 6, tzinfo=timezone.utc),
+        )
+    assert json.loads((workspace / "status.json").read_text())["state"] == "failed"
+    # Both artifact and fallback-summary producers follow the separate probe.
+    assert (
+        "outputs/factor-readiness/${{ github.run_id }}-${{ github.run_attempt }}/status.json"
+        in workflow
+    )
+    assert "outputs/factor-readiness/*/status.json" in workflow
+    assert (
+        "outputs/factor-daily/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}/provider-readiness"
+        not in workflow
+    )

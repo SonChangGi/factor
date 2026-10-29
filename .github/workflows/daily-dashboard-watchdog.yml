@@ -114,7 +114,7 @@ jobs:
         run: |
           set -euo pipefail
           started_at="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" --jq .created_at)"
-          python scripts/publish_refresh_status.py --repository . --branch "${DEFAULT_BRANCH}" \
+          python scripts/publish_refresh_status.py --wait-for-pages --repository . --branch "${DEFAULT_BRANCH}" \
             --status-directory "${RUNNER_TEMP}/watchdog-readiness" --run-id "${GITHUB_RUN_ID}" \
             --run-attempt "${GITHUB_RUN_ATTEMPT}" --source-commit "$(git rev-parse HEAD)" \
             --target "${TARGET_DATA_AS_OF}" --started-at "${started_at}" --outcome failure > "${RUNNER_TEMP}/status-outputs"

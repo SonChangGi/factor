@@ -134,7 +134,7 @@ jobs:
         if: steps.freshness.outputs.skip != 'true'
         run: |
           python -m factor_lab.integrated_automation provider-ready --baseline site \
-            --output "outputs/factor-daily/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}/provider-readiness"
+            --output "outputs/factor-readiness/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
 
       - name: Resolve the explicitly requested immutable input cache
         id: reuse
@@ -272,6 +272,9 @@ jobs:
           status="outputs/factor-daily/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}/status.json"
           if [[ -f "${status}" ]]; then
             jq '{state,targetDataAsOf,dataAsOf,resultId,lastGoodPreserved,errorType,reason}' "${status}" >> "$GITHUB_STEP_SUMMARY"
+          elif [[ -f "outputs/factor-readiness/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}/status.json" ]]; then
+            jq '{status,targetDataAsOf,missingSymbols,attempts}' \
+              "outputs/factor-readiness/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}/status.json" >> "$GITHUB_STEP_SUMMARY"
           else
             echo "Refresh skipped: ${{ steps.freshness.outputs.skip }}; target close: ${{ steps.freshness.outputs.target_data_as_of }}" >> "$GITHUB_STEP_SUMMARY"
           fi
@@ -284,7 +287,7 @@ jobs:
           if-no-files-found: ignore
           path: |
             outputs/factor-daily/${{ github.run_id }}-${{ github.run_attempt }}/status.json
-            outputs/factor-daily/${{ github.run_id }}-${{ github.run_attempt }}/provider-readiness/status.json
+            outputs/factor-readiness/${{ github.run_id }}-${{ github.run_attempt }}/status.json
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always() && steps.freshness.outputs.skip != 'true'
@@ -293,6 +296,7 @@ jobs:
           retention-days: 3
           if-no-files-found: warn
           path: |
+            outputs/factor-readiness/*/status.json
             outputs/factor-daily/*/status.json
             outputs/factor-daily/*/history-revision.json
             outputs/factor-daily/*/price-vintage.json
@@ -367,7 +371,7 @@ jobs:
         run: |
           set -euo pipefail
           started_at="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" --jq .created_at)"
-          python scripts/publish_refresh_status.py --repository . \
+          python scripts/publish_refresh_status.py --wait-for-pages --repository . \
             --status-directory "${RUNNER_TEMP}/factor-attempt" --run-id "${GITHUB_RUN_ID}" \
             --run-attempt "${GITHUB_RUN_ATTEMPT}" --source-commit "${CALCULATION_SOURCE}" \
             --target "${TARGET_DATA_AS_OF}" --started-at "${started_at}" \

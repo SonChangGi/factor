@@ -66,7 +66,7 @@ jobs:
           expected_sha="${REQUESTED_SOURCE_SHA:-${PUSH_SOURCE_SHA}}"
           expected_sha="${expected_sha:-${local_sha}}"
           case "${REQUEST_ORIGIN}" in
-            manual|push|daily-dashboard|daily-dashboard-watchdog|controlled-analysis) ;;
+            manual|push|daily-dashboard|daily-dashboard-watchdog|controlled-analysis|daily-refresh-status|watchdog-refresh-status) ;;
             *)
               echo "Unsupported deployment request origin." >&2
               exit 1
