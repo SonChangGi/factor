@@ -127,7 +127,12 @@ jobs:
         if: steps.freshness.outputs.skip != 'true'
         run: |
           python scripts/release_preflight.py --mode daily
-          python -m pytest -q tests/test_integrated_automation.py::test_fresh_spy_does_not_hide_widespread_stale_equities
+          # Offline behavioral regressions for provider gaps and split vintages
+          # must pass in this locked runtime before any live probe or collection.
+          python -m pytest -q \
+            tests/test_integrated_automation.py::test_fresh_spy_does_not_hide_widespread_stale_equities \
+            tests/test_integrated_refresh_guards.py \
+            tests/test_integrated_vintage.py
 
       - name: Wait for bounded provider readiness before full collection
         id: readiness
