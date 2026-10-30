@@ -5,6 +5,8 @@ vintage keeps accepted observations and joins new quotes using the return betwee
 two observations from the SAME provider response. Real source revisions keep
 the complete new column and must pass the unchanged historical-result gate; a
 historical NAV is never copied or exempted from validation.
+When a new split event arrives without its adjusted quote basis or any new
+price, the complete verified column remains archived with no appended quote.
 """
 from copy import deepcopy
 from dataclasses import replace
@@ -14,6 +16,88 @@ import numpy as np
 import pandas as pd
 
 from .integrated_data import load_integrated_market, compute_eligibility
+
+
+def defer_unadjusted_split_history(current, previous, cutoff):
+    """Retain verified history while a new split has no adjusted quote basis.
+
+    Some responses add a split event before changing their historical OHLC.
+    Inverting that event would then corrupt as-traded prices and liquidity.
+    This narrow case has no new price, unchanged provider OHLC/TR history,
+    and exactly the inverse price/volume distortion from the new split.
+    Any genuine revision or new quote must still face the normal history gate.
+    """
+    from .integrated_data import FIELDS, PROVIDER_FIELDS, OPTIONAL_FIELDS
+
+    overlap = previous.prices.index
+    future = current.prices.index > cutoff
+    deferred = []
+    pending = {r['symbol']: r for r in previous.metadata.get('priceVintage', {}).get(
+        'deferredSplitAdjustments', [])}
+    for symbol in current.prices:
+        actions = current.splits.loc[future, symbol].dropna()
+        actions = actions[actions.gt(0) & actions.ne(1)]
+        # A pending event can move inside the next day's overlap. Carry only
+        # the exact previously recorded action, never a new historical edit.
+        for action in pending.get(symbol, {}).get('reportedActions', []):
+            day = pd.Timestamp(action['date'])
+            if day not in current.splits.index:
+                continue
+            observed = current.splits.at[day, symbol]
+            if np.isfinite(observed) and observed == action['ratio']:
+                actions.loc[day] = observed
+        actions = actions.sort_index()
+        if (actions.empty or current.prices.loc[future, symbol].notna().any()
+                or current.dividends.loc[future, symbol].fillna(0).ne(0).any()
+                or not previous.prices[symbol].notna().equals(
+                    current.prices.loc[overlap, symbol].notna())):
+            continue
+        ratio = float(actions.prod())
+        if not np.isfinite(ratio) or ratio <= 0 or np.isclose(ratio, 1):
+            continue
+        observed = previous.prices[symbol].notna()
+        if not observed.any():
+            continue
+        def matches(name, scale=1.):
+            old, new = getattr(previous, name), getattr(current, name)
+            if old is None or new is None:
+                return False
+            a = old.loc[observed, symbol].to_numpy(dtype=float)
+            b = new.loc[overlap[observed], symbol].to_numpy(dtype=float)
+            return bool(np.isfinite(a).all() and np.isfinite(b).all()
+                        and np.allclose(b, a * scale, rtol=1e-12, atol=0))
+        if not (matches('prices') and matches('dividends') and matches('splits')
+                and all(matches('provider_' + f)
+                and matches('raw_' + f, ratio) for f in ('close', 'open', 'high', 'low'))
+                and matches('provider_volumes') and matches('volumes', 1 / ratio)):
+            continue
+        deferred.append(dict(symbol=symbol, reason='split_event_before_provider_price_adjustment',
+            acceptedSnapshotId=previous.metadata['snapshotId'],
+            observedThrough=str(overlap[observed][-1].date()),
+            reportedActions=[dict(date=str(day.date()), ratio=float(value))
+                             for day, value in actions.items()],
+            currentQuoteStatus='unavailable',
+            policy='entire_verified_column_preserved_no_new_quotes_or_forward_fill'))
+    if not deferred:
+        return current, deferred
+    # Replace whole columns in shallow frame copies: shared source arrays remain
+    # untouched and a full-universe matrix is not duplicated for one security.
+    frames = {}
+    for name in FIELDS + PROVIDER_FIELDS + OPTIONAL_FIELDS:
+        old, new = getattr(previous, name), getattr(current, name)
+        if new is None:
+            continue
+        if old is None:
+            raise ValueError('Verified split-history field is missing: ' + name)
+        frame = new.copy(deep=False)
+        for record in deferred:
+            symbol = record['symbol']
+            values = old[symbol].reindex(frame.index)
+            if pd.api.types.is_bool_dtype(old[symbol]):
+                values = values.fillna(False).astype(bool)
+            frame[symbol] = values
+        frames[name] = frame
+    return replace(current, **frames), deferred
 
 
 def extend_price_vintage(current, previous):
@@ -26,6 +110,8 @@ def extend_price_vintage(current, previous):
     overlap = current.prices.index[current.prices.index <= cutoff]
     if not previous.prices.index.equals(overlap):
         raise ValueError('Accepted price vintage calendar changed')
+
+    current, deferred_splits = defer_unadjusted_split_history(current, previous, cutoff)
 
     # Freeze only economically equivalent price inputs. Genuine source changes
     # retain their complete new column, so the existing NAV/null/choice gate
@@ -94,6 +180,7 @@ def extend_price_vintage(current, previous):
         downloadedSnapshotId=current.metadata['snapshotId'],
         acceptedThrough=str(cutoff.date()), bridges=bridges,
         preservedAdjustedHistoryChanges=revisions,
+        deferredSplitAdjustments=deferred_splits,
         sourceChecks=['raw_close', 'dividends', 'splits', 'calendar', 'null_state'],
         unfrozenSourceRevisions=[dict(symbol=symbol, changes=changes,
             policy='complete_current_column_subject_to_unchanged_history_gate')
