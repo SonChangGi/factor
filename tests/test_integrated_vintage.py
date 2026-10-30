@@ -113,6 +113,108 @@ def test_calendar_change_still_fails_closed():
         extend_price_vintage(new,old)
 
 
+def pending_split_pair():
+    dates = pd.bdate_range('2026-10-26', periods=4)
+    old_prices = pd.DataFrame({'A': [100., 110., np.nan]}, index=dates[:3])
+    old = market(old_prices, raw=old_prices / 10)
+    new_prices = old_prices.reindex(dates)
+    new = market(new_prices, raw=new_prices / 400)
+    # Provider's split-adjusted history has NOT yet changed, but its new
+    # event made inversion divide as-traded prices and multiply volume by40.
+    new.volumes.loc[dates[:2], 'A'] = old.volumes.A.iloc[:2] * 40
+    new.splits = new.splits.copy()
+    new.splits.loc[dates[-1], 'A'] = .025
+    from factor_lab.integrated_data import compute_eligibility
+    old.eligibility = compute_eligibility(old.prices, old.raw_close, old.volumes, ['A'])
+    for m in (old, new):
+        for field in ('close', 'open', 'high', 'low'):
+            setattr(m, 'raw_' + field, getattr(m, 'raw_' + field).copy())
+            setattr(m, 'provider_' + field, m.prices.copy())
+        m.provider_volumes = old.volumes.reindex(m.prices.index).copy()
+    return old, new
+
+
+def test_new_split_without_new_quote_preserves_verified_whole_column():
+    from factor_lab.integrated_data import FIELDS, PROVIDER_FIELDS, OPTIONAL_FIELDS
+    old, new = pending_split_pair()
+    original = deepcopy(new)
+    fixed = extend_price_vintage(new, old)
+    for name in FIELDS + PROVIDER_FIELDS + OPTIONAL_FIELDS:
+        a, b = getattr(old, name), getattr(fixed, name)
+        if a is None:
+            continue
+        pd.testing.assert_series_equal(b.A.iloc[:len(a)], a.A, check_freq=False)
+        if name == 'eligibility':
+            assert not b.A.iloc[-1]
+        else:
+            assert pd.isna(b.A.iloc[-1])
+        pd.testing.assert_frame_equal(getattr(new, name), getattr(original, name))
+    report = fixed.metadata['priceVintage']['deferredSplitAdjustments'][0]
+    assert report['symbol'] == 'A' and report['currentQuoteStatus'] == 'unavailable'
+    assert report['reportedActions'] == [{'date': '2026-10-29', 'ratio': .025}]
+    assert not fixed.metadata['priceVintage']['unfrozenSourceRevisions']
+    from factor_lab.integrated_automation import validate_required_valuations, RefreshInputError
+    # Preserving history must never admit a missing valuation for a held name.
+    held = {'data': {'asOf': '2026-10-28'},
+            'selection': {'holdings': [{'symbol': 'A', 'weight': 1.}]}, 'factors': []}
+    with pytest.raises(RefreshInputError, match='Required holding valuation unavailable'):
+        validate_required_valuations(fixed, held, '2026-10-29')
+
+
+@pytest.mark.parametrize('change', ['new_quote', 'source_revision', 'volume_revision',
+                                  'recovered_old_quote', 'dividend', 'old_action'])
+def test_split_deferral_never_hides_new_quotes_or_real_revisions(change):
+    old, new = pending_split_pair()
+    if change == 'new_quote':
+        new.prices.iloc[-1, 0] = 4400.
+    elif change == 'source_revision':
+        new.provider_close.iloc[0, 0] += 1
+    elif change == 'volume_revision':
+        new.volumes.iloc[0, 0] += 100
+    elif change == 'recovered_old_quote':
+        new.prices.iloc[-2, 0] = 120.
+    elif change == 'dividend':
+        new.dividends.iloc[-1, 0] = 2
+    elif change == 'old_action':
+        new.splits.iloc[0, 0] = .5
+    fixed = extend_price_vintage(new, old)
+    assert not fixed.metadata['priceVintage']['deferredSplitAdjustments']
+    pd.testing.assert_frame_equal(fixed.raw_close, new.raw_close)
+
+
+def test_split_with_consistently_adjusted_provider_basis_is_not_deferred():
+    old, new = pending_split_pair()
+    for field in ('close', 'open', 'high', 'low'):
+        getattr(new, 'provider_' + field).iloc[:2] *= 40
+        getattr(new, 'raw_' + field).iloc[:2] *= 40
+    new.prices.iloc[:2] *= 40
+    new.volumes.iloc[:2] /= 40
+    pd.testing.assert_frame_equal(new.raw_close.iloc[:3], old.raw_close)
+    fixed = extend_price_vintage(new, old)
+    assert not fixed.metadata['priceVintage']['deferredSplitAdjustments']
+    pd.testing.assert_series_equal(fixed.prices.A.iloc[:3], old.prices.A)
+
+
+def test_pending_split_survives_next_daily_extension_without_a_new_quote(tmp_path):
+    from factor_lab.integrated_data import FIELDS, PROVIDER_FIELDS, OPTIONAL_FIELDS
+    old, new = pending_split_pair()
+    first = extend_price_vintage(new, old)
+    first = save_integrated_market(first, tmp_path / 'first')
+    following = deepcopy(new)
+    index = pd.bdate_range('2026-10-26', periods=5)
+    for name in FIELDS + PROVIDER_FIELDS + OPTIONAL_FIELDS:
+        frame = getattr(following, name)
+        if frame is not None:
+            setattr(following, name, frame.reindex(index))
+    following.metadata['dataAsOf'] = '2026-10-30'
+    second = extend_price_vintage(following, first)
+    pd.testing.assert_frame_equal(second.raw_close.iloc[:3], old.raw_close)
+    assert second.prices.A.iloc[-2:].isna().all()
+    record = second.metadata['priceVintage']['deferredSplitAdjustments'][0]
+    assert record['reportedActions'] == [{'date': '2026-10-29', 'ratio': .025}]
+    assert record['acceptedSnapshotId'] == first.metadata['snapshotId']
+
+
 def test_cache_binding_and_repeated_extension_use_canonical_not_fresh_raw(tmp_path):
     dates=pd.bdate_range('2026-10-15',periods=3)
     old=market(pd.DataFrame({'A':[90.,99.]},index=dates[:2]),
