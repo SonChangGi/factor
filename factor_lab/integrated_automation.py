@@ -175,9 +175,13 @@ def provider_ready(baseline, output, *, now=None, attempts=3, delay_seconds=30, 
     sleep = sleep or time.sleep
     receipts = []
     for attempt in range(1, attempts + 1):
-        for offset in range(0, len(remaining), 25):
-            # Freeze this attempt's ordering, even when later batches succeed.
-            symbols = sorted(remaining)[offset:offset + 25]
+        # A provider batch can omit a few securities even when their individual
+        # responses are complete. Match the collector's single-symbol recovery
+        # on the final retry, without fanning out a market-wide provider outage.
+        pending = sorted(remaining)
+        batch_size = 1 if attempt > 1 and attempt == attempts and len(pending) <= 25 else 25
+        for offset in range(0, len(pending), batch_size):
+            symbols = pending[offset:offset + batch_size]
             if not symbols:
                 continue
             source_symbols = list(provider_symbols(symbols, context).values())

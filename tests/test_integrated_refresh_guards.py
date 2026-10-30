@@ -156,6 +156,64 @@ def test_probe_wait_is_bounded_and_only_missing_symbols_are_requeried(tmp_path, 
     assert report["status"] == "ready" and report["attempts"] == 3
 
 
+@pytest.mark.parametrize("invalid_single", [None, "stale", "zero_volume"])
+def test_probe_final_retry_isolates_small_batch_gaps_and_keeps_validation(
+    tmp_path, monkeypatch, invalid_single
+):
+    site, _ = _probe_site(tmp_path, monkeypatch)
+    baseline = site / "data/integrated-result.json"
+    payload = json.loads(baseline.read_text())
+    payload["selection"]["holdings"].append({"symbol": "ADEA", "weight": 0.5})
+    baseline.write_text(json.dumps(payload))
+    original = baseline.read_bytes()
+    calls, waits = [], []
+
+    def download(symbols, **kwargs):
+        calls.append(symbols)
+        response = _provider(symbols, missing=[s for s in symbols if s in {"ADEA", "HUBB"}]
+                             if len(symbols) > 1 else [])
+        if len(symbols) == 1 and symbols[0] == "HUBB":
+            if invalid_single == "stale":
+                response = response.iloc[:-1]
+            elif invalid_single == "zero_volume":
+                response.loc[response.index[-1], ("Volume", "HUBB")] = 0
+        return response
+
+    kwargs = dict(now=datetime(2026, 10, 29, 6, tzinfo=timezone.utc),
+                  download=download, sleep=waits.append)
+    if invalid_single:
+        with pytest.raises(automation.RefreshInputError) as error:
+            automation.provider_ready(site, tmp_path / "probe", **kwargs)
+        assert error.value.symbols == ["HUBB"]
+    else:
+        report = automation.provider_ready(site, tmp_path / "probe", **kwargs)
+        assert report["status"] == "ready"
+        assert [r["symbols"] for r in report["receipts"][-2:]] == [["ADEA"], ["HUBB"]]
+    assert calls[1:] == [["ADEA", "HUBB"], ["ADEA"], ["HUBB"]]
+    assert waits == [30, 30]
+    assert baseline.read_bytes() == original
+
+
+def test_probe_widespread_outage_keeps_batched_request_bound(tmp_path, monkeypatch):
+    site, _ = _probe_site(tmp_path, monkeypatch)
+    baseline = site / "data/integrated-result.json"
+    payload = json.loads(baseline.read_text())
+    payload["selection"]["holdings"] = [{"symbol": f"GAP{i:02}", "weight": 0.01}
+                                         for i in range(26)]
+    baseline.write_text(json.dumps(payload))
+    calls = []
+
+    def download(symbols, **kwargs):
+        calls.append(symbols)
+        return _provider(symbols, missing=symbols)
+
+    with pytest.raises(automation.RefreshInputError):
+        automation.provider_ready(site, tmp_path / "probe",
+            now=datetime(2026, 10, 29, 6, tzinfo=timezone.utc),
+            download=download, sleep=lambda _: None)
+    assert len(calls) == 6 and all(len(c) > 1 for c in calls)
+
+
 def test_verified_exact_session_policy_quote_admits_probe_but_does_not_invent_inputs(
     tmp_path, monkeypatch
 ):
