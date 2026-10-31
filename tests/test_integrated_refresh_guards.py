@@ -56,6 +56,44 @@ def test_only_new_day_missing_gets_fresh_bounded_retry_and_full_history_is_prese
     assert len(list((tmp_path / "downloads").glob("*.csv.gz"))) == 2
 
 
+def test_cross_day_cache_replay_preserves_original_provider_horizon(tmp_path, monkeypatch):
+    import yfinance as yf
+    import factor_lab.integrated_data as data
+    class LaterDay(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return datetime(2026, 11, 1, tzinfo=timezone.utc)
+    monkeypatch.setattr(data, 'datetime', LaterDay)
+    original = dict(start='2010-01-01', endExclusive='2026-10-29',
+                    providerEndExclusive='2026-10-30')
+    (tmp_path / 'reuse-source-request.json').write_text(json.dumps(original))
+    calls = []
+    def download(symbols, **kwargs):
+        calls.append(kwargs['end'])
+        return _provider(symbols)
+    monkeypatch.setattr(yf, 'download', download)
+    collect_integrated_market(tmp_path, start='2010-01-01', end='2026-10-29',
+                              symbols=['HUBB'], target_session='2026-10-28')
+    assert calls and set(calls) == {'2026-10-30'}
+    assert json.loads((tmp_path / 'request.json').read_text())['providerEndExclusive'] == '2026-10-30'
+
+
+@pytest.mark.parametrize('end', ['2026-10-28', '2026-11-03'])
+def test_replay_cannot_shorten_required_actions_or_claim_a_future_horizon(tmp_path, monkeypatch, end):
+    import yfinance as yf
+    import factor_lab.integrated_data as data
+    class LaterDay(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return datetime(2026, 11, 1, tzinfo=timezone.utc)
+    monkeypatch.setattr(data, 'datetime', LaterDay)
+    monkeypatch.setattr(yf, 'download', lambda *a, **kw: pytest.fail('must reject before download'))
+    (tmp_path / 'reuse-source-request.json').write_text(json.dumps(dict(
+        start='2010-01-01', endExclusive='2026-10-29', providerEndExclusive=end)))
+    with pytest.raises(ValueError, match='provider horizon'):
+        collect_integrated_market(tmp_path, start='2010-01-01', end='2026-10-29', symbols=['HUBB'])
+
+
 def test_persistent_new_day_gap_is_not_filled_or_retried_forever(tmp_path, monkeypatch):
     import yfinance as yf
 

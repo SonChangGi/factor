@@ -389,6 +389,17 @@ def collect_integrated_market(output_dir: Path, start="2010-01-01", end=None, sy
     # Historical output still requires all later corporate actions because
     # Yahoo retroactively split-adjusts the entire downloaded price history.
     download_end = max(pd.Timestamp(end), today + pd.Timedelta(days=1)).date().isoformat()
+    replay_file = root / 'reuse-source-request.json'
+    if replay_file.exists():
+        # Explicit recovery replays the verified response horizon, rather than
+        # claiming that yesterday's cached responses were fetched through today.
+        replay = json.loads(replay_file.read_text())
+        replay_end = replay.get('providerEndExclusive', replay.get('endExclusive'))
+        if (replay.get('start') != start or replay.get('endExclusive') != end
+                or not isinstance(replay_end, str)
+                or not pd.Timestamp(end) <= pd.Timestamp(replay_end) <= pd.Timestamp(download_end)):
+            raise ValueError('Reused provider horizon differs from the completed-session request')
+        download_end = pd.Timestamp(replay_end).date().isoformat()
     context = listing_context(sorted(set(requested) | set(BENCHMARKS)), pd.Timestamp(end) - pd.Timedelta(days=1))
     request = {
         "listing": context,
