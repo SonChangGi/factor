@@ -215,6 +215,94 @@ def test_pending_split_survives_next_daily_extension_without_a_new_quote(tmp_pat
     assert record['acceptedSnapshotId'] == first.metadata['snapshotId']
 
 
+def resumed_split_pair():
+    from factor_lab.integrated_data import FIELDS, PROVIDER_FIELDS, OPTIONAL_FIELDS
+    old, raw = pending_split_pair()
+    accepted = extend_price_vintage(raw, old)
+    accepted.metadata['snapshotId'] = 'accepted-deferred-test'
+    index = pd.bdate_range('2026-10-26', periods=5)
+    current = deepcopy(raw)
+    for name in FIELDS + PROVIDER_FIELDS + OPTIONAL_FIELDS:
+        frame = getattr(current, name)
+        if frame is not None:
+            setattr(current, name, frame.reindex(index))
+    current.metadata['dataAsOf'] = str(index[-1].date())
+    for name in ('prices', 'valuation_prices', 'raw_close', 'raw_open', 'raw_high',
+                 'raw_low', 'provider_close', 'provider_open', 'provider_high', 'provider_low'):
+        getattr(current, name).loc[index[-1], 'A'] = 4400.
+    for name in ('volumes', 'provider_volumes'):
+        getattr(current, name).loc[index[-1], 'A'] = 1000.
+    for name in ('splits', 'dividends'):
+        getattr(current, name).loc[index[-1], 'A'] = 0.
+    return accepted, current
+
+
+def test_pending_split_quote_resumption_rebases_units_without_inventing_returns():
+    accepted, current = resumed_split_pair()
+    current.provider_volumes = current.provider_volumes.fillna(0).astype('int64')
+    original = deepcopy(current)
+    fixed = extend_price_vintage(current, accepted)
+    pd.testing.assert_series_equal(fixed.raw_close.A.iloc[:len(accepted.prices)],
+                                   accepted.raw_close.A, check_freq=False)
+    pd.testing.assert_series_equal(fixed.prices.A.iloc[:len(accepted.prices)],
+                                   accepted.prices.A, check_freq=False)
+    assert fixed.prices.A.iloc[-1] == 110.  # 4400 / (110 * 40), not a 40x return
+    assert fixed.raw_close.A.iloc[-1] == 4400.
+    assert fixed.provider_close.A.iloc[0] == 4000.
+    assert fixed.volumes.A.iloc[0] == accepted.volumes.A.iloc[0]
+    assert fixed.provider_volumes.A.iloc[0] == current.provider_volumes.A.iloc[0] / 40
+    assert not fixed.metadata['priceVintage']['unfrozenSourceRevisions']
+    assert fixed.metadata['priceVintage']['normalizedSplitBases'][0]['providerHistoryScale'] == 40.
+    assert not fixed.metadata['priceVintage']['deferredSplitAdjustments']
+    for name in ('prices', 'raw_close', 'provider_close', 'volumes', 'provider_volumes'):
+        pd.testing.assert_frame_equal(getattr(current, name), getattr(original, name))
+
+
+@pytest.mark.parametrize('change', ['unreviewed_action', 'changed_action', 'new_action', 'ohlc_revision',
+                                  'volume_revision', 'dividend', 'recovered_pre_action_quote'])
+def test_quote_resumption_never_hides_unproven_or_revised_split_history(change):
+    accepted, current = resumed_split_pair()
+    if change == 'unreviewed_action':
+        accepted.metadata['priceVintage']['deferredSplitAdjustments'] = []
+    elif change == 'changed_action':
+        current.splits.loc['2026-10-29', 'A'] = .05
+    elif change == 'new_action':
+        current.splits.loc['2026-10-30', 'A'] = .5
+    elif change == 'ohlc_revision':
+        current.provider_open.iloc[0, 0] += 1
+    elif change == 'volume_revision':
+        current.provider_volumes.iloc[0, 0] += 1
+    elif change == 'dividend':
+        current.dividends.iloc[0, 0] = 1
+    else:
+        current.prices.loc['2026-10-28', 'A'] = 120.
+    fixed = extend_price_vintage(current, accepted)
+    assert not fixed.metadata['priceVintage']['normalizedSplitBases']
+    assert fixed.raw_close.A.iloc[0] == current.raw_close.A.iloc[0]
+
+
+def test_normalized_split_survives_serialization_and_provider_history_catchup(tmp_path):
+    accepted, current = resumed_split_pair()
+    fixed = save_integrated_market(extend_price_vintage(current, accepted), tmp_path / 'accepted')
+    from factor_lab.integrated_data import load_integrated_market
+    fixed = load_integrated_market(tmp_path / 'accepted')
+    repeated = extend_price_vintage(current, fixed)
+    pd.testing.assert_frame_equal(repeated.prices, fixed.prices, check_freq=False)
+    assert repeated.metadata['priceVintage']['normalizedSplitBases']
+    # Provider finally rebases history. No second correction is applied.
+    caught_up = deepcopy(current)
+    before = caught_up.prices.index < pd.Timestamp('2026-10-29')
+    for name in ('prices', 'valuation_prices', 'raw_close', 'raw_open', 'raw_high',
+                 'raw_low', 'provider_close', 'provider_open', 'provider_high', 'provider_low'):
+        getattr(caught_up, name).loc[before, 'A'] *= 40
+    for name in ('volumes', 'provider_volumes'):
+        getattr(caught_up, name).loc[before, 'A'] /= 40
+    result = extend_price_vintage(caught_up, fixed)
+    assert not result.metadata['priceVintage']['normalizedSplitBases']
+    pd.testing.assert_frame_equal(result.prices, fixed.prices, check_freq=False)
+    pd.testing.assert_frame_equal(result.raw_close, fixed.raw_close, check_freq=False)
+
+
 def test_cache_binding_and_repeated_extension_use_canonical_not_fresh_raw(tmp_path):
     dates=pd.bdate_range('2026-10-15',periods=3)
     old=market(pd.DataFrame({'A':[90.,99.]},index=dates[:2]),
