@@ -1,16 +1,13 @@
 {
   "attempt": {
-    "finishedAtUtc": "2026-10-31T01:38:59.439221+00:00",
-    "missingSymbols": [
-      "ADEA",
-      "HUBB"
-    ],
-    "reasonCode": "provider_not_ready",
+    "finishedAtUtc": "2026-10-31T08:19:38.105351+00:00",
+    "missingSymbols": [],
+    "reasonCode": "refresh_failed",
     "runAttempt": 1,
-    "runId": "41156070512",
-    "runUrl": "https://github.com/SonChangGi/factor/actions/runs/41156070512",
-    "sourceCommit": "95b51343f1d5126e1c1e19c87e2177821fd99690",
-    "startedAtUtc": "2026-10-31T01:35:24Z",
+    "runId": "41180944585",
+    "runUrl": "https://github.com/SonChangGi/factor/actions/runs/41180944585",
+    "sourceCommit": "30f4d2fc63cf83208594fb59bff77cf72e74e7e5",
+    "startedAtUtc": "2026-10-31T07:31:32Z",
     "status": "failed",
     "targetDataAsOf": "2026-10-30"
   },
@@ -22,6 +19,6 @@
     "resultId": "0cc361b188b7465298009c02"
   },
   "schemaVersion": "factor-refresh-status/v1",
-  "status": "delayed",
-  "updatedAtUtc": "2026-10-31T01:38:59.439221+00:00"
+  "status": "failed",
+  "updatedAtUtc": "2026-10-31T08:20:09.203888+00:00"
 }
