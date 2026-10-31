@@ -18,6 +18,83 @@ import pandas as pd
 from .integrated_data import load_integrated_market, compute_eligibility
 
 
+def normalize_pending_split_basis(current, previous):
+    """Complete a deferred split when quotes resume before history is rebased.
+
+    Only a hash-bound previously deferred action can authorize this unit
+    conversion. The entire observed pre-action OHLC/TR/volume history must
+    corroborate the split inversion exactly; real revisions remain untouched.
+    New quotes are retained, never inferred. The normal NAV gate still applies.
+    """
+    vintage = previous.metadata.get('priceVintage', {})
+    candidates = vintage.get('deferredSplitAdjustments', []) + vintage.get('normalizedSplitBases', [])
+    frames, records = {}, []
+    for receipt in candidates:
+        symbol = receipt['symbol']
+        actions = receipt.get('reportedActions', [])
+        if len(actions) != 1 or symbol not in current.prices:
+            continue
+        day = pd.Timestamp(actions[0]['date'])
+        ratio = float(actions[0]['ratio'])
+        if (not np.isfinite(ratio) or ratio <= 0 or ratio == 1
+                or day not in current.splits.index
+                or current.splits.at[day, symbol] != ratio
+                or not current.prices.loc[current.prices.index >= day, symbol].notna().any()):
+            continue
+        later_actions = current.splits.loc[current.prices.index >= day, symbol].dropna()
+        later_actions = later_actions[later_actions.gt(0) & later_actions.ne(1)]
+        if len(later_actions) != 1 or later_actions.index[0] != day:
+            continue
+        overlap = previous.prices.index[previous.prices.index < day]
+        observed = previous.prices.loc[overlap, symbol].notna()
+        if (not observed.any() or not observed.equals(current.prices.loc[overlap, symbol].notna())
+                or current.dividends.loc[current.prices.index >= day, symbol].fillna(0).ne(0).any()):
+            continue
+        dates = overlap[observed]
+        def matches(name, scale=1.):
+            old, new = getattr(previous, name), getattr(current, name)
+            if old is None or new is None:
+                return False
+            a, b = old.loc[dates, symbol].to_numpy(float), new.loc[dates, symbol].to_numpy(float)
+            return bool(np.isfinite(a).all() and np.isfinite(b).all()
+                        and np.allclose(b * scale, a, rtol=1e-12, atol=0))
+        scale = 1 / ratio
+        prior_normalized = receipt in vintage.get('normalizedSplitBases', [])
+        provider_scale = scale if prior_normalized else 1.
+        if not (matches('prices') and matches('splits') and matches('dividends')
+                and all(matches('raw_' + f, scale) and matches('provider_' + f, provider_scale)
+                        for f in ('close', 'open', 'high', 'low'))
+                and matches('volumes', ratio) and matches('provider_volumes', 1 / provider_scale)):
+            continue
+        # Conversion is restricted to sessions before the confirmed action.
+        # Provider prices and volumes use paired inverse units; dollar volume
+        # is invariant, as-traded history matches the accepted snapshot.
+        for name, multiplier in [
+            ('prices', scale), ('valuation_prices', scale),
+            *[(prefix + f, scale) for prefix in ('raw_', 'provider_')
+              for f in ('close', 'open', 'high', 'low')],
+            ('volumes', ratio), ('provider_volumes', ratio),
+        ]:
+            original = getattr(current, name)
+            if original is None:
+                continue
+            frame = frames.setdefault(name, original.copy(deep=False))
+            values = original[symbol].astype(float).copy()
+            values.loc[values.index < day] *= multiplier
+            frame[symbol] = values
+        records.append(dict(symbol=symbol, reportedActions=actions,
+            acceptedSnapshotId=previous.metadata['snapshotId'],
+            reason='resumed_quote_before_provider_history_rebase',
+            providerHistoryScale=scale, comparedObservations=int(observed.sum()),
+            policy='pre_action_units_only_new_quotes_unchanged'))
+    if not records:
+        return current, records
+    result = replace(current, **frames)
+    result.eligibility = compute_eligibility(result.prices, result.raw_close,
+        result.volumes, result.metadata.get('requestedSymbols'))
+    return result, records
+
+
 def defer_unadjusted_split_history(current, previous, cutoff):
     """Retain verified history while a new split has no adjusted quote basis.
 
@@ -111,6 +188,7 @@ def extend_price_vintage(current, previous):
     if not previous.prices.index.equals(overlap):
         raise ValueError('Accepted price vintage calendar changed')
 
+    current, normalized_splits = normalize_pending_split_basis(current, previous)
     current, deferred_splits = defer_unadjusted_split_history(current, previous, cutoff)
 
     # Freeze only economically equivalent price inputs. Genuine source changes
@@ -128,6 +206,19 @@ def extend_price_vintage(current, previous):
         old = getattr(previous, name).to_numpy(dtype=float)
         new = getattr(current, name).loc[overlap].to_numpy(dtype=float)
         equal = np.isclose(old, new, rtol=8*np.finfo(float).eps, atol=0, equal_nan=True)
+        # A deferred action was explicitly recorded even though its no-quote
+        # rows were archived. Admit only that same action and neutral missing
+        # action rows after a fully corroborated split-basis normalization.
+        if name in ('dividends', 'splits'):
+            for receipt in normalized_splits:
+                col = current.prices.columns.get_loc(receipt['symbol'])
+                unquoted = previous.prices[receipt['symbol']].isna().to_numpy()
+                permitted = np.isnan(old[:, col]) & (new[:, col] == 0)
+                if name == 'splits':
+                    for action in receipt['reportedActions']:
+                        permitted |= ((overlap == pd.Timestamp(action['date']))
+                                      & np.isnan(old[:, col]) & (new[:, col] == action['ratio']))
+                equal[:, col] |= unquoted & permitted
         for col in np.flatnonzero(~equal.all(axis=0)):
             row = np.flatnonzero(~equal[:, col])[0]
             record(current.prices.columns[col], name, overlap[row], old[row,col], new[row,col])
@@ -181,6 +272,7 @@ def extend_price_vintage(current, previous):
         acceptedThrough=str(cutoff.date()), bridges=bridges,
         preservedAdjustedHistoryChanges=revisions,
         deferredSplitAdjustments=deferred_splits,
+        normalizedSplitBases=normalized_splits,
         sourceChecks=['raw_close', 'dividends', 'splits', 'calendar', 'null_state'],
         unfrozenSourceRevisions=[dict(symbol=symbol, changes=changes,
             policy='complete_current_column_subject_to_unchanged_history_gate')
