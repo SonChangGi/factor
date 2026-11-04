@@ -501,6 +501,18 @@
   ],
   "exchanges": [
     {
+      "symbol": "LXP",
+      "targetSymbol": null,
+      "date": "2026-11-02",
+      "cashPerShare": 61.2,
+      "settlementDate": null,
+      "sourceUrl": "https://www.sec.gov/Archives/edgar/data/910108/000110465926121376/tm2628722d1_8k.htm",
+      "legalSourceSections": ["Item 2.01", "Item 3.01"],
+      "confirmationSourceUrl": "https://www.sec.gov/Archives/edgar/data/910108/000110465926121376/tm2628722d1_ex99-1.htm",
+      "retrievedAt": "2026-11-04",
+      "reason": "Brookfield and CPP Investments completed the cash acquisition on Nov 2. Each eligible common share converted to a USD61.20 cash entitlement and ceased trading. Actual shareholder payment date is unverified; retain a non-interest-bearing receivable."
+    },
+    {
       "symbol": "ACA",
       "targetSymbol": null,
       "date": "2026-10-23",
