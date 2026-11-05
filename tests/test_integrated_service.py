@@ -80,11 +80,18 @@ def test_stress_bindings_use_final_parent_identity_and_same_policy(tmp_path, mon
                   research={'stress': [dict(id='delay2', sourceResultId='provisional'),
                                        dict(id='fixed_choice_delay2', sourceResultId='provisional')]},
                   resultIdentity=dict(resultId='provisional', inputHash='input', engineVersion='v4'))
-    monkeypatch.setattr(engine, 'run_integrated_analysis', lambda *a, **k: result)
+    def calculate(*args, progress_callback, **kwargs):
+        progress_callback(dict(stage='factor', id='A', completed=1, total=1))
+        progress = json.loads((tmp_path / 'progress.json').read_text())
+        assert progress['stage'] == 'factor' and progress['id'] == 'A'
+        assert progress['elapsedSeconds'] >= 0
+        return result
+    monkeypatch.setattr(engine, 'run_integrated_analysis', calculate)
     monkeypatch.setattr(service, 'data_inventory', lambda m: [])
     monkeypatch.setattr(service, 'code_fingerprint', lambda: ('code', {'engine.py': 'digest'}))
     market = SimpleNamespace(metadata={'automationPolicy': {'sha256': 'policy'}})
     actual = service.execute_run(market, {}, tmp_path)
+    assert json.loads((tmp_path / 'progress.json').read_text())['stage'] == 'completed'
     for stress in actual['research']['stress']:
         assert stress['inputHash'] == 'input' and stress['codeHash'] == 'code'
         assert stress['sourceResultId'] == actual['resultIdentity']['resultId'] != 'provisional'

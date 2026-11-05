@@ -11,6 +11,7 @@ import json
 import math
 import shutil
 import threading
+import time
 import uuid
 
 
@@ -223,7 +224,12 @@ def execute_run(market, settings, directory, comparison_factors=None, common_uni
         from .integrated_variants import run_legacy_experiment
         result = run_legacy_experiment(market, config, experiment_definition)
     else:
-        result = run_integrated_analysis(market, config, progress_callback=lambda event: print(json.dumps(event), flush=True))
+        started = time.monotonic()
+        def report_progress(event):
+            progress = {**event, 'elapsedSeconds': round(time.monotonic() - started, 3)}
+            atomic_json(Path(directory) / 'progress.json', progress)
+            print(json.dumps(progress), flush=True)
+        result = run_integrated_analysis(market, config, progress_callback=report_progress)
         result['resultIdentity']['strategyType'] = 'monthly_selection'
     result['data']['symbols'] = data_inventory(market)
     if code_fingerprint()[0] != code_hash:
@@ -241,6 +247,8 @@ def execute_run(market, settings, directory, comparison_factors=None, common_uni
             stress['sourcePolicyHash'] = policy['sha256']
     validate_result(result)
     atomic_json(Path(directory) / 'result.json', result)
+    if experiment_definition is None:
+        report_progress(dict(stage='completed', status='completed'))
     return result
 
 

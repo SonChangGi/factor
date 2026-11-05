@@ -384,6 +384,7 @@ jobs:
             outputs/factor-daily/*/raw/manifest.json
             outputs/factor-daily/*/market/manifest.json
             outputs/factor-daily/*/analysis/result.json
+            outputs/factor-daily/*/analysis/progress.json
             outputs/factor-candidate/publication.json
 
   request-pages-deployment:

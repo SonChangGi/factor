@@ -101,6 +101,11 @@ jobs:
             --baseline site --candidate outputs/universe-candidate
           python scripts/validate_integrated_publication.py site
           python -m factor_lab.publication_security site
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '22'
+      - name: Validate the complete release before the result commit
+        run: bash scripts/check_release.sh "${RUNNER_TEMP}/factor-reviewed-universe-public"
       - name: Publish the reviewed baseline and verify Pages
         env:
           GH_TOKEN: ${{ github.token }}
@@ -134,5 +139,7 @@ jobs:
           if-no-files-found: ignore
           path: |
             outputs/universe-migration/*/status.json
+            outputs/universe-migration/*/progress.json
             outputs/universe-migration/*/market/manifest.json
             outputs/universe-migration/*/analysis/result.json
+            outputs/universe-migration/*/analysis/progress.json

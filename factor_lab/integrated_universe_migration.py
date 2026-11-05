@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import replace
 from hashlib import sha256
 import json
+import time
 from pathlib import Path
 
 POLICY = Path(__file__).parent / "resources/integrated_historical_universe.json"
@@ -83,8 +84,16 @@ def migrate(workspace, baseline, candidate, archive_root, source_commit):
                   sourceCommit=source_commit, baselineHash=before, inputCacheKey=cache["key"],
                   targetDataAsOf=policy["applyThrough"])
     atomic_json(workspace / "status.json", status)
+    started = time.monotonic()
+    def progress(stage, state):
+        event = dict(stage=stage, status=state,
+                     elapsedSeconds=round(time.monotonic() - started, 3))
+        atomic_json(workspace / "progress.json", event)
+        print(json.dumps(event), flush=True)
     try:
+        progress("input_load", "started")
         market = load_integrated_market(archive_root / "market")
+        progress("input_load", "completed")
         if market.metadata["snapshotId"] != previous["resultIdentity"]["inputHash"]:
             raise ValueError("Restored market differs from the accepted production result")
         # The raw and price vintage remain the accepted cache's exact inputs.
@@ -92,8 +101,13 @@ def migrate(workspace, baseline, candidate, archive_root, source_commit):
             raise ValueError("Restored market cache binding differs")
         market = apply_historical_universe(market, historical_contract())
         holdings_check = validate_required_valuations(market, previous, previous["data"]["asOf"])
+        progress("snapshot_save", "started")
         market = save_integrated_market(market, workspace / "market", compression_level=1)
+        progress("snapshot_save", "completed")
+        progress("analysis", "started")
         result = execute_run(market, previous["settings"], workspace / "analysis")
+        progress("analysis", "completed")
+        progress("validation", "started")
         if result["registry"] != previous["registry"] or result["settings"] != previous["settings"]:
             raise ValueError("Reviewed universe migration changed definitions or financial settings")
         validation = validate_automated_result(result, policy["applyThrough"])
@@ -117,6 +131,7 @@ def migrate(workspace, baseline, candidate, archive_root, source_commit):
                       dataAsOf=result["data"]["asOf"], candidateHash=tree_hash(candidate),
                       candidate=str(candidate.resolve()), validation=validation)
         atomic_json(workspace / "status.json", status)
+        progress("validation", "completed")
         return status
     except Exception as exc:
         status.update(state="failed", errorType=type(exc).__name__, reason=str(exc),

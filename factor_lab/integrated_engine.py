@@ -338,7 +338,8 @@ def rank_candidates(candidates):
     return sorted(eligible, key=order)
 
 
-def run_integrated_analysis(market, config=None, factors=None, *, progress_callback=None):
+def run_integrated_analysis(market, config=None, factors=None, *, progress_callback=None,
+                            research_diagnostics=True):
     from .integrated_factors import (
         factor_registry,
         compute_integrated_factors,
@@ -394,19 +395,26 @@ def run_integrated_analysis(market, config=None, factors=None, *, progress_callb
     weights_by_id = {}
     signals_by_id = {}
     lookup = {d["id"]: d for d in definitions}
+    # Stress scenarios use the same formation scores and monthly signal dates.
+    # Retain only those rows, keeping cache memory proportional to months.
+    stress_panels = {} if config.run_stress and panels is None else panels
     panel_iterator = panels.items() if panels is not None else iter_integrated_factors(market)
     for key, raw_panel in panel_iterator:
         definition = lookup[key]
-        panel = raw_panel.where(market.eligibility)
+        if config.run_stress and panels is None:
+            stress_panels[key] = raw_panel.reindex(dates)
+        panel = raw_panel.reindex(market.prices.index).where(market.eligibility)
         if config.common_universe:
             panel = panel.copy()
             panel.loc[run_index] = panel.loc[run_index].where(eligibility)
         allocations = {d: _allocation(d, panel, market, adv, config, rc) for d in dates}
-        ic, quintiles = monthly_signal_diagnostics(
-            panel, market.prices, dates, definition["direction"], config.execution_delay_sessions,
-            valuation_prices=market.valuation_prices,
-            corporate_actions=market.metadata.get("corporateActions", ()),
-        )
+        ic, quintiles = [], []
+        if research_diagnostics:
+            ic, quintiles = monthly_signal_diagnostics(
+                panel, market.prices, dates, definition["direction"], config.execution_delay_sessions,
+                valuation_prices=market.valuation_prices,
+                corporate_actions=market.metadata.get("corporateActions", ()),
+            )
         row = dict(
             id=key,
             label=definition["name"],
@@ -421,7 +429,8 @@ def run_integrated_analysis(market, config=None, factors=None, *, progress_callb
             drawdown=[],
             holdings=[],
         )
-        signals_by_id[key] = panel.reindex(dates).rank(axis=1, pct=True)
+        if research_diagnostics:
+            signals_by_id[key] = panel.reindex(dates).rank(axis=1, pct=True)
         if definition["selectionEligible"]:
             result = run_factor_backtest(
                 key,
@@ -475,7 +484,8 @@ def run_integrated_analysis(market, config=None, factors=None, *, progress_callb
                 receivableWeight=result.ending_receivable_weight,
                 liquidCashWeight=result.ending_cash_weight - result.ending_receivable_weight,
             )
-            weights_by_id[key] = actual_holding_snapshots(result, dates, run_index)
+            if research_diagnostics:
+                weights_by_id[key] = actual_holding_snapshots(result, dates, run_index)
             del result
         factor_rows.append(row)
         if progress_callback is not None:
@@ -600,9 +610,13 @@ def run_integrated_analysis(market, config=None, factors=None, *, progress_callb
         )
     returns_by_id["MONTHLY_SELECTION"] = selected.returns
     intervals_by_id["MONTHLY_SELECTION"] = selected.return_interval_sessions
-    research = build_research(
+    if research_diagnostics and progress_callback is not None:
+        progress_callback(dict(stage="research", status="started"))
+    research = (build_research(
         returns_by_id, signals_by_id, weights_by_id, factor_rows, config, intervals_by_id
-    )
+    ) if research_diagnostics else {})
+    if research_diagnostics and progress_callback is not None:
+        progress_callback(dict(stage="research", status="completed"))
     settings = asdict(config)
     identity = dict(
         snapshotId=market.metadata.get("snapshotId"), settings=settings, definitions=definitions,
@@ -635,8 +649,9 @@ def run_integrated_analysis(market, config=None, factors=None, *, progress_callb
     )
     if config.run_stress:
         output["research"]["stress"] = run_stress_suite(
-            market, config, panels, frozen_targets=selected_targets,
+            market, config, stress_panels, frozen_targets=selected_targets,
             source_result_id=output["resultIdentity"]["resultId"],
+            progress_callback=progress_callback,
         )
     annotate_metric_states(output)
     return clean(output)
@@ -761,7 +776,8 @@ def frozen_choice_delay_stress(market, config, targets, source_result_id=None):
                 selectionPolicy="frozen_original_monthly_targets")
 
 
-def run_stress_suite(market, config, factors=None, *, frozen_targets=None, source_result_id=None):
+def run_stress_suite(market, config, factors=None, *, frozen_targets=None,
+                     source_result_id=None, progress_callback=None):
     from dataclasses import replace
 
     scenarios = [
@@ -778,7 +794,8 @@ def run_stress_suite(market, config, factors=None, *, frozen_targets=None, sourc
     # monthly choices for the frozen experiment.
     if frozen_targets is None:
         base = run_integrated_analysis(
-            market, replace(config, run_stress=False, bootstrap_repetitions=0), factors)
+            market, replace(config, run_stress=False, bootstrap_repetitions=0), factors,
+            research_diagnostics=False)
         source_result_id = source_result_id or base["resultIdentity"]["resultId"]
         frozen_targets = {
             pd.Timestamp(row["signalDate"]): TargetAllocation(
@@ -788,8 +805,15 @@ def run_stress_suite(market, config, factors=None, *, frozen_targets=None, sourc
         }
     results = []
     for name, change in scenarios:
+        if progress_callback is not None:
+            progress_callback(dict(stage="stress", id=name, status="started",
+                                   completed=len(results), total=7))
         effective = replace(config, **change, run_stress=False, bootstrap_repetitions=0)
-        run = run_integrated_analysis(market, effective, factors)
+        def scenario_progress(event):
+            progress_callback({**event, "scenarioId": name})
+        run = run_integrated_analysis(
+            market, effective, factors, research_diagnostics=False,
+            progress_callback=scenario_progress if progress_callback is not None else None)
         results.append(dict(
             id=name, settings=change, effectiveSettings=asdict(effective),
             metrics=run["selection"]["metrics"], nav=run["selection"]["nav"],
@@ -798,7 +822,16 @@ def run_stress_suite(market, config, factors=None, *, frozen_targets=None, sourc
             sourceRunResultId=run["resultIdentity"]["resultId"],
             selectionPolicy="reevaluated_monthly_candidates",
         ))
+        if progress_callback is not None:
+            progress_callback(dict(stage="stress", id=name, status="completed",
+                                   completed=len(results), total=7))
+    if progress_callback is not None:
+        progress_callback(dict(stage="stress", id="fixed_choice_delay2", status="started",
+                               completed=6, total=7))
     results.insert(2, frozen_choice_delay_stress(market, config, frozen_targets, source_result_id))
+    if progress_callback is not None:
+        progress_callback(dict(stage="stress", id="fixed_choice_delay2", status="completed",
+                               completed=7, total=7))
     return results
 
 

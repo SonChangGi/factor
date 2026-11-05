@@ -96,3 +96,5 @@ def test_manual_migration_shares_daily_concurrency_and_has_no_collection():
     assert "collect_integrated_market" not in text
     assert "--mode daily" in text and "confirm-input-cache" in text
     assert "git push" in text and "expected_source_sha" in text
+    assert text.index("bash scripts/check_release.sh") < text.index("git commit")
+    assert "node-version: '22'" in text

@@ -312,7 +312,7 @@ def test_frozen_delay_executes_original_targets_not_new_candidates(monkeypatch):
                               prices * 0, prices * 0, prices.notna(), {'snapshotId': 'frozen-test'})
     original = {dates[1]: allocation(dates[1], 'A')}
     calls = []
-    def reevaluated(market, config, factors):
+    def reevaluated(market, config, factors, **kwargs):
         calls.append(config)
         # Re-evaluation deliberately chooses B. The frozen path must ignore
         # that decision and keep the original A order.
