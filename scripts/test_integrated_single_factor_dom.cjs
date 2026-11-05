@@ -13,7 +13,7 @@ assert.equal(d.querySelector('#view-factor'),null);
 assert.equal(d.querySelector('[data-view="factor"]'),null);
 assert.equal(d.querySelectorAll('#current-factor option').length,4);
 assert.equal(d.querySelector('#current-factor').value,'');
-assert.deepEqual([...d.querySelector('#current-content .lab-chart-wrap').querySelectorAll('.lab-legend button')].map(x=>x.textContent),['월별 선택','SPY']);
+assert.deepEqual([...d.querySelector('#current-content .lab-chart-wrap').querySelectorAll('.lab-legend button[data-series]')].map(x=>x.textContent),['월별 선택','SPY']);
 d.querySelector('#current-model-performance').click();
 assert.equal(d.querySelector('#current-factor').value,'VOL252');
 assert(d.querySelector('#current-content svg').getAttribute('aria-label').startsWith('변동성 누적 수익률'));

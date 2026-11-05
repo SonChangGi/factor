@@ -120,7 +120,7 @@ function bind({charts, root, palette, finite, fmt, linePath, chartTicks, endpoin
         output += `<text x="${x(date)}" y="${height-6}" text-anchor="middle">${escape(date.slice(0,7))}</text>`;
       }
       chart.series.forEach((series,index) => {
-        if (enabled[index]) output += `<path class="trace" stroke="${color(index)}" d="${linePath(dates.map(date => {const value=points[index].get(date);return {date,value:plottable(value)?value:null};}),x,y)}"/>`;
+        if (enabled[index]) output += `<path class="trace" data-qr-series-id="${index}" stroke="${color(index)}" d="${linePath(dates.map(date => {const value=points[index].get(date);return {date,value:plottable(value)?value:null};}),x,y)}"/>`;
       });
       svg.innerHTML = `<g class="chart-plot">${output}</g><g class="chart-observation" style="pointer-events:none"></g>`;
       observation = svg.querySelector('.chart-observation');
@@ -148,7 +148,7 @@ function bind({charts, root, palette, finite, fmt, linePath, chartTicks, endpoin
       position = next;
       if (event.pointerType === 'touch') {
         activeTouch = event.pointerId;
-        try { svg.setPointerCapture(event.pointerId); } catch (_) { /* Static SVG and unsupported pointer capture. */ }
+        /* QuantRange captures only after a real drag, preserving taps on series. */
       }
       observe();
     });
@@ -166,13 +166,12 @@ function bind({charts, root, palette, finite, fmt, linePath, chartTicks, endpoin
       }
       observe();
     });
-    for (const button of box.querySelectorAll('.lab-legend [data-series]')) listen(button,'click',() => {
-      const index = Number(button.dataset.series);
-      if (!Number.isInteger(index) || index < 0 || index >= enabled.length) return;
-      enabled[index] = !enabled[index];
-      button.setAttribute('aria-pressed',String(enabled[index]));
-      draw();
-    });
+    for (const button of box.querySelectorAll('.lab-legend [data-series]')) {
+      const index=Number(button.dataset.series);if(!Number.isInteger(index))continue;
+      const visibility=document.createElement('button');visibility.type='button';visibility.className='qr-visibility';visibility.textContent='숨기기';visibility.setAttribute('aria-label',chart.series[index].label+' 표시 전환');visibility.setAttribute('aria-pressed','true');button.after(visibility);cleanups.push(()=>visibility.remove());
+      listen(visibility,'click',()=>{enabled[index]=!enabled[index];visibility.textContent=enabled[index]?'숨기기':'표시';visibility.setAttribute('aria-pressed',String(enabled[index]));if(range){range.config.series=rangeSeries.filter((s,i)=>enabled[i]);range.clear()}draw()});
+      listen(button,'click',()=>{if(!enabled[index]){enabled[index]=true;visibility.textContent='숨기기';visibility.setAttribute('aria-pressed','true');range.config.series=rangeSeries.filter((s,i)=>enabled[i]);draw()}range?.selectSeries(String(index),{origin:'legend'})});
+    }
     const scaleControl = box.querySelector('[data-chart-scale]');
     if (chart.wealth && scaleControl) listen(scaleControl,'change',() => {
       scale = scaleControl.value === 'log' ? 'log' : 'linear';
@@ -186,6 +185,9 @@ function bind({charts, root, palette, finite, fmt, linePath, chartTicks, endpoin
       });
       observer.observe(box); cleanups.push(() => observer.disconnect());
     }
+    const rangeSeries=chart.series.map((s,i)=>({id:String(i),label:s.label,color:color(i),measure:chart.kind==='pct'?'pp':'absolute',scale:chart.kind==='pct'?100:1,unit:chart.kind==='pct'?'%':'',points:s.points.map(p=>({key:p.date,value:p.value}))}));
+    const hitSeries=event=>{const matrix=svg.getScreenCTM();if(!matrix)return null;let best=null,distance=9;chart.series.forEach((series,index)=>{if(!enabled[index])return;let previous=null;for(const date of dates){const value=points[index].get(date);if(!plottable(value)){previous=null;continue}const b=new DOMPoint(x(date),y(value)).matrixTransform(matrix),a=previous||b,dx=b.x-a.x,dy=b.y-a.y,t=Math.max(0,Math.min(1,((event.clientX-a.x)*dx+(event.clientY-a.y)*dy)/(dx*dx+dy*dy||1))),d=Math.hypot(event.clientX-a.x-t*dx,event.clientY-a.y-t*dy);if(d<distance){distance=d;best=String(index)}previous=b}});return best};
+    const range=window.QuantRange?.svg({id:'factor-'+chart.id,element:svg,host:box,hitSeries,currentIndex:()=>position,onSeriesRequest:(id,ctx)=>{if(ctx.mode==='point'&&Number.isInteger(ctx.index)){position=ctx.index;pinned=true;observe()}},onReset:()=>{position=dates.length-1;pinned=false;observe()},onSeriesFocus:id=>{for(const b of box.querySelectorAll('.lab-legend [data-series]'))b.setAttribute('aria-pressed',String(b.dataset.series===id))},domain:dates.map(key=>({key,label:key})),series:rangeSeries,x:i=>x(dates[i]),plotTop:T,plotBottom:()=>height-B});if(range)cleanups.push(()=>range.destroy());
     redraws.push(draw);
     draw();
   }
