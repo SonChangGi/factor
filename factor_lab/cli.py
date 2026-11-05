@@ -1167,7 +1167,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
-        if args.command in {"integrated-collect", "integrated-amend", "integrated-run", "serve-integrated"}:
+        if args.command in {
+            "integrated-collect", "integrated-amend", "integrated-universe",
+            "integrated-apply-universe", "integrated-run", "serve-integrated",
+        }:
             from .integrated_cli import dispatch
             return dispatch(args)
         if args.command == "build-site":

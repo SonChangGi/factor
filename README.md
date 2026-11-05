@@ -2,7 +2,7 @@
 
 Momentum과 Best의 합집합 2,960종목을 사용해 가격·거래량 32개 정의를 연구하고, 26개 후보 중에서 매월 팩터를 선택합니다. 최근 756거래일의 비용 후 CAGR·Sortino·Calmar·MDD·기간 안정성을 비교하며 실제 보유에서 다음 거래일 종가 목표로 이동하는 회계를 계산합니다.
 
-[통합 화면](https://sonchanggi.github.io/factor/)은 현재 선택·단일 팩터·팩터 탐색·비교·실험·데이터를 제공합니다. 단일 팩터에서 통합 정의를 선택하면 전체 비용 후 성과와 신호월별 실제 보유 종목·비중을 조회합니다. [통합 사용법](docs/development/integrated-local.md), [데이터 계약](docs/development/integrated-data-contract.md), [성과 감사](docs/development/performance-repair-2026-10-20.md), [배포 계약](docs/development/deployment-2026-10-20.md)을 참고하세요.
+[통합 화면](https://sonchanggi.github.io/factor/)은 현재 선택·팩터 탐색·비교·실험·데이터를 제공합니다. 현재 선택의 성과 보기에서 팩터를 고르면 전체 비용 후 성과와 신호월별 실제 보유 종목·비중을 조회합니다. [통합 사용법](docs/development/integrated-local.md), [데이터 계약](docs/development/integrated-data-contract.md), [성과 감사](docs/development/performance-repair-2026-10-20.md), [배포 계약](docs/development/deployment-2026-10-20.md)을 참고하세요.
 
 ```bash
 python -m factor_lab.cli integrated-run --snapshot <frozen-snapshot> --output <new-run-directory>
@@ -10,6 +10,8 @@ python -m factor_lab.cli serve-integrated --snapshot <frozen-snapshot> --site <r
 ```
 
 공개 정적 화면은 검증된 결과를 조회합니다. 로컬 실험은 같은 Python 엔진으로 실행합니다. 정기 계산은 통합 엔진으로 실행합니다. 기존 Control JSON은 별도 legacy 계약으로 유지하며 새 통합 결과로 묵시 변환하지 않습니다. [자동화·이전 주소·입력 보존](docs/development/factor-operations.md)을 참고하세요. Pages는 `build_type=workflow` 설정의 단일 게시자를 사용하고, `GITHUB_TOKEN`으로 만든 정기 결과 커밋은 정확한 SHA로 배포를 명시적으로 요청합니다.
+
+미국 주요 거래소 기준의 현재 후보와 ETF 추가 목록은 [유니버스 점검·로컬 계산](docs/development/exchange-universe.md)에서 확인할 수 있습니다.
 
 ## 기존 Momentum 계산 참고
 

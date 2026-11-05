@@ -14,7 +14,28 @@ ROOT = Path(__file__).resolve().parents[1]
 def validate_daily_publication(site, manifest, result):
     from factor_lab.integrated_validation import validate_automated_result, validate_runtime_lock
     validation = validate_automated_result(result, manifest['dataAsOf'])
-    assert manifest['status'] == 'passed' and manifest['publicationType'] in {'automated_daily', 'reviewed_definition_migration'}
+    assert manifest['status'] == 'passed' and manifest['publicationType'] in {'automated_daily', 'reviewed_definition_migration', 'reviewed_universe_migration'}
+    historical = result['data'].get('historicalUniverse')
+    if historical:
+        policy_bytes = subprocess.check_output([
+            'git', 'show', manifest['calculationSourceCommit'] +
+            ':factor_lab/resources/integrated_historical_universe.json'], cwd=ROOT)
+        policy = json.loads(policy_bytes)
+        expected = {key: policy[key] for key in ('applyThrough', 'excluded', 'listedStockCount', 'sources')}
+        expected.update(policyVersion=policy['version'], policySha256=hashlib.sha256(policy_bytes).hexdigest())
+        assert historical == expected, 'Historical universe differs from the reviewed source'
+    if manifest['publicationType'] == 'reviewed_universe_migration':
+        review = manifest['validation']['universeReview']
+        source = manifest['calculationSourceCommit']
+        policy_bytes = subprocess.check_output(
+            ['git', 'show', source + ':factor_lab/resources/integrated_historical_universe.json'], cwd=ROOT)
+        policy = json.loads(policy_bytes)
+        assert review['policySha256'] == hashlib.sha256(policy_bytes).hexdigest()
+        assert review['baselineResultId'] == policy['baselineResultId']
+        assert review['baselineInputHash'] == policy['baselineInputHash']
+        assert review['baselineResultSha256'] == policy['baselineResultSha256']
+        assert review['definitionsUnchanged'] is True and review['settingsUnchanged'] is True
+        assert result['data']['historicalUniverse']['policySha256'] == review['policySha256']
     if manifest['publicationType'] == 'reviewed_definition_migration':
         contract = manifest['validation']['definitionReview']
         assert contract['path'] == 'data/definition-review.json'

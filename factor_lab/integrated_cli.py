@@ -8,6 +8,16 @@ def add_integrated_commands(subparsers):
     collect.add_argument('--output', type=Path, required=True)
     collect.add_argument('--start', default='2010-01-01')
     collect.add_argument('--end')
+    screen = subparsers.add_parser('integrated-universe', help='Screen current major-exchange investment candidates')
+    screen.add_argument('--result', type=Path, required=True)
+    screen.add_argument('--nasdaq', type=Path, required=True)
+    screen.add_argument('--other', type=Path, required=True)
+    screen.add_argument('--output', type=Path, required=True)
+    apply = subparsers.add_parser('integrated-apply-universe', help='Freeze a screened final-session selection mask')
+    apply.add_argument('--snapshot', type=Path, required=True)
+    apply.add_argument('--nasdaq', type=Path, required=True)
+    apply.add_argument('--other', type=Path, required=True)
+    apply.add_argument('--output', type=Path, required=True)
     run = subparsers.add_parser('integrated-run', help='Run integrated research from a frozen snapshot')
     run.add_argument('--snapshot', type=Path, required=True)
     run.add_argument('--output', type=Path, required=True)
@@ -29,6 +39,16 @@ def dispatch(args):
     from .integrated_data import collect_integrated_market, load_integrated_market
     if args.command == 'integrated-collect':
         market = collect_integrated_market(args.output, args.start, args.end)
+        print(json.dumps({'snapshotId': market.metadata['snapshotId'], 'path': str(args.output)}))
+    elif args.command == 'integrated-universe':
+        from .investable_universe import write_universe_screen
+        screen = write_universe_screen(args.result, args.nasdaq, args.other, args.output)
+        print(json.dumps({'path': str(args.output), 'decisions': screen['decisionCounts']}))
+    elif args.command == 'integrated-apply-universe':
+        from .integrated_data import save_integrated_market
+        from .investable_universe import apply_exchange_screen
+        market = apply_exchange_screen(load_integrated_market(args.snapshot), args.nasdaq, args.other)
+        market = save_integrated_market(market, args.output, compression_level=1)
         print(json.dumps({'snapshotId': market.metadata['snapshotId'], 'path': str(args.output)}))
     elif args.command == 'integrated-amend':
         from .integrated_data import save_integrated_market

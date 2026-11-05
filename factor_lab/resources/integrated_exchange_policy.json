@@ -1,0 +1,16 @@
+{
+  "version": "major-us-exchange-forward-v1",
+  "earliestSession": "2026-11-05",
+  "review": {
+    "marketAsOf": "2026-11-03",
+    "directoryAsOf": "2026-11-04",
+    "sourceResultId": "473c6056e97bcaa8dccb414a",
+    "universeSourceHash": "3bc62b6516d30d937a2726ec617e127f0abfc4b5ad27b225d79e30df8f35fc25",
+    "sourceHashes": [
+      "a8620641b8717573cb3640ed392606d85361fa95b18df798e6aae6d60ebe9a70",
+      "2eaa3d73cd4cf9de20cc6abaab1d07e13bcfd9eafbb3a3a50742f57929aa7825"
+    ],
+    "listedStocks": 2769
+  },
+  "minimumReviewedCoverage": 0.95
+}

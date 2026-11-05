@@ -85,6 +85,14 @@ def daily_compatibility(result, *, registry=None, symbols=None, settings=None, l
     if changed_settings:
         raise ValueError('Daily update requires reviewed financial settings: '
                          + ', '.join(changed_settings))
+    historical = result['data'].get('historicalUniverse')
+    if historical:
+        from factor_lab.integrated_universe_migration import historical_contract
+        if historical != historical_contract():
+            raise ValueError('Historical universe requires a reviewed baseline')
+    if result['data'].get('universeSourceHash') or result['data'].get('exchangeUniverse'):
+        from factor_lab.integrated_exchange_refresh import reviewed_policy
+        reviewed_policy(result['data'])
     validate_runtime_lock(result['resultIdentity'],
                           (ROOT / 'uv.lock').read_bytes() if lock is None else lock)
 

@@ -36,6 +36,8 @@ def code_fingerprint():
              'integrated_legacy_best.py', 'integrated_repairs.py', 'integrated_history.py',
              'integrated_automation.py', 'integrated_validation.py', 'integrated_archive.py', 'integrated_vintage.py', 'integrated_listing.py', 'resources/integrated_listing_transitions.json',
              'resources/integrated_market_policy.json', 'factors.py',
+             'investable_universe.py', 'integrated_exchange_refresh.py', 'resources/integrated_exchange_policy.json',
+             'integrated_universe_migration.py', 'resources/integrated_historical_universe.json',
              'advanced_factors.py', 'universe.py', 'resources/integrated_legacy_map.json',
              'resources/integrated_universe.json')
     records = {name: hashlib.sha256((source / name).read_bytes()).hexdigest()
@@ -122,6 +124,16 @@ def data_inventory(market):
         for symbol in receipt.get('symbols', []):
             collected[symbol] = receipt.get('retrievedAt')
     rows = []
+    exchange_screen = market.metadata.get('exchangeScreen', {})
+    daily_exchange = market.metadata.get('exchangeUniverse', {}).get('latest', {})
+    if daily_exchange:
+        exchange_screen = {**daily_exchange, 'signalDate': daily_exchange['session']}
+    historical = market.metadata.get('historicalUniverse', {})
+    if not exchange_screen and str(market.prices.index[-1].date()) <= historical.get('applyThrough', ''):
+        exchange_screen = {**historical, 'signalDate': str(market.prices.index[-1].date())}
+    screening_exclusions = exchange_screen.get('excluded', {}) if (
+        exchange_screen.get('signalDate') == str(market.prices.index[-1].date())
+    ) else {}
     listings = {row['symbol']: row for row in market.metadata.get('listing', {}).get('transitions', [])}
     quarantines = {r['symbol']: r for r in market.metadata.get('amendments', [])
                    if r['kind'] == 'unverified_input_quarantine'}
@@ -171,6 +183,8 @@ def data_inventory(market):
             reasons = ([f"{action['date']} · 주당 ${action['cashPerShare']:.2f} 현금 수취권 전환"]
                        if action.get('targetSymbol') is None else
                        [f"{action['date']} · {action['targetSymbol']} {action['shareRatio']}주로 전환"])
+        if symbol in screening_exclusions:
+            reasons.append('미국 거래소 유니버스 제외 · ' + screening_exclusions[symbol])
         provenance = 'Yahoo Finance'
         if symbol in alternate:
             provenance += ' · ' + alternate[symbol]['sourceUrl'].split('/')[2]

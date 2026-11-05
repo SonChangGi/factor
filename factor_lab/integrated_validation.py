@@ -203,6 +203,8 @@ def validate_automated_result(result, target_as_of=None):
     if target_as_of:
         require(asof == target_as_of, 'Result does not reach target NYSE session')
     identity = result['resultIdentity']
+    from .integrated_universe_migration import validate_historical_targets
+    validate_historical_targets(result)
     require(identity.get('strategyType') == 'monthly_selection', 'Wrong daily strategy')
     require(identity['inputHash'] == result['data']['snapshotId'], 'Snapshot binding')
     require(identity['codeHash'] == hashlib.sha256(json.dumps(identity['codeHashFiles'], sort_keys=True).encode()).hexdigest(), 'Code fingerprint')
@@ -219,6 +221,34 @@ def validate_automated_result(result, target_as_of=None):
                                str(date.fromisoformat(asof) + timedelta(days=65)))
     import pandas as pd
     monthends = [d for d in sessions if calendar.next_session(d).month != pd.Timestamp(d).month]
+    exchange = result['data'].get('exchangeUniverse')
+    exchange_signals = {}
+    if exchange:
+        latest = exchange['latest']
+        exchange_signals = exchange['signalObservations']
+        policy_path = 'resources/integrated_exchange_policy.json'
+        require(exchange['policySha256'] == identity['codeHashFiles'].get(policy_path),
+                'Exchange eligibility policy source mismatch')
+        require(latest['session'] == asof and set(exchange_signals) <= set(monthends),
+                'Exchange eligibility dates do not match the calculation')
+        if asof in monthends:
+            require(exchange_signals.get(asof) == latest, 'Missing exchange evidence for final month-end')
+        for session, evidence in {**exchange_signals, asof: latest}.items():
+            require(evidence['session'] == session and set(evidence['excluded']) <= symbols,
+                    'Invalid exchange exclusions')
+            require(len(evidence['sources']) == 2 and all(
+                source['createdAtEastern'][:10] == session and
+                len(source['sha256']) == 64 and all(c in '0123456789abcdef' for c in source['sha256'])
+                for source in evidence['sources']), 'Invalid exchange source evidence')
+        current = {row['symbol'] for row in result['data']['symbols'] if row['status'] == 'eligible'}
+        require(current.isdisjoint(latest['excluded']), 'Exchange-excluded security remains eligible')
+
+    def check_exchange_targets(row):
+        evidence = exchange_signals.get(row['signalDate'])
+        if evidence:
+            require(set(evidence['excluded']).isdisjoint(h['symbol'] for h in row['targetHoldings']),
+                    'Exchange-excluded security in a target portfolio')
+
     delay = settings['execution_delay_sessions']
     require(type(delay) is int and delay >= 1, 'Invalid execution delay')
     def execution(row):
@@ -247,6 +277,7 @@ def validate_automated_result(result, target_as_of=None):
         require(dates == monthends, 'Fixed history monthly coverage')
         for h in history:
             expected = execution(h)
+            check_exchange_targets(h)
             require((h['status'] == 'pending') == (expected > asof), 'Fixed pending execution timing')
             if h['status'] == 'executed':
                 require(h.get('holdingsAsOf') == expected and h.get('valuationStatus') == 'available', 'Executed snapshot is stale')
@@ -264,6 +295,7 @@ def validate_automated_result(result, target_as_of=None):
     pending = selection['history'][-1] if selection['history'][-1]['executionDate'] > asof else None
     require(selection.get('pending') == pending, 'Pending selection binding')
     for h in selection['history']:
+        check_exchange_targets(h)
         expected = execution(h)
         if h.get('holdingsAsOf'):
             require(iso(h['holdingsAsOf']) <= min(expected, asof), 'Future selection holding snapshot')
@@ -295,7 +327,11 @@ def validate_automated_result(result, target_as_of=None):
 def write_automated_manifest(candidate, result, source_commit, validation, *, publication_type='automated_daily'):
     from .integrated_service import atomic_json
     require(validation.get('status') == 'passed', 'Candidate validation did not pass')
-    require(publication_type in {'automated_daily', 'reviewed_definition_migration'}, 'Unknown publication type')
+    require(publication_type in {'automated_daily', 'reviewed_definition_migration', 'reviewed_universe_migration'}, 'Unknown publication type')
+    if publication_type == 'reviewed_universe_migration':
+        require(validation.get('universeReview', {}).get('policySha256') ==
+                result['data'].get('historicalUniverse', {}).get('policySha256'),
+                'Universe migration requires an explicit reviewed policy')
     if publication_type == 'reviewed_definition_migration':
         require(validation.get('definitionReview', {}).get('reviewedDefinitionIds') == ['CONSISTENCY12_1', 'MAX1M', 'SIGNED_VP63'],
                 'Reviewed migration requires an explicit definition review')

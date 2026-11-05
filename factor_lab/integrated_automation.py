@@ -391,8 +391,10 @@ def export_input_diagnostics(reuse_root, output, *, symbols=None, start='2015-01
     return receipt
 
 
-def run(workspace, baseline, candidate, source_commit, *, now=None, reuse_input_root=None, archived_input_root=None):
+def run(workspace, baseline, candidate, source_commit, *, now=None, reuse_input_root=None,
+        archived_input_root=None, exchange_directory=None, exchange_recovery_directory=None):
     from .integrated_data import collect_integrated_market, save_integrated_market
+    from .integrated_exchange_refresh import exchange_observation, exchange_plan, apply_exchange_observation
     from .integrated_service import atomic_json, execute_run, build_site, code_fingerprint
     from .integrated_validation import validate_automated_result, write_automated_manifest
     workspace, baseline, candidate = map(Path, (workspace, baseline, candidate))
@@ -416,6 +418,25 @@ def run(workspace, baseline, candidate, source_commit, *, now=None, reuse_input_
             status['reusedInputCache'] = seed_download_cache(reuse_input_root, workspace / 'raw', target)
             atomic_json(workspace / 'status.json', status)
         baseline_payload = json.loads((baseline / 'data/integrated-result.json').read_text())
+        exchange_baseline = baseline_payload['data']
+        _, recovery_session = exchange_plan(exchange_baseline, target)
+        try:
+            recovered_exchange = None
+            if recovery_session:
+                recovered_exchange = exchange_observation(
+                    exchange_baseline, recovery_session, exchange_recovery_directory,
+                )
+                exchange_baseline = {
+                    **exchange_baseline, 'asOf': recovery_session,
+                    'exchangeUniverse': recovered_exchange,
+                }
+            exchange = exchange_observation(exchange_baseline, target, exchange_directory)
+        except (OSError, ValueError) as exc:
+            raise RefreshInputError('refresh_failed', f'Exchange directory refresh: {exc}') from exc
+        if exchange:
+            atomic_json(workspace / 'exchange-observation.json', {
+                **exchange, 'recovered': recovered_exchange,
+            })
         reference = coverage_contract_from_result(baseline_payload)
         policy = json.loads(POLICY.read_text())
         required_targets = required_valuation_symbols(baseline_payload, target, policy.get('exchanges', [])) | {'SPY', 'QQQ', '^IXIC'}
@@ -441,6 +462,7 @@ def run(workspace, baseline, candidate, source_commit, *, now=None, reuse_input_
         del previous, raw, vintage
         market_check = validate_market_refresh(market, baseline_payload, target)
         market_check['holdingValuations'] = validate_required_valuations(market, baseline_payload, target)
+        market = apply_exchange_observation(market, baseline_payload['data'], exchange, recovered_exchange)
         market = save_integrated_market(market, workspace / 'market', compression_level=1)
         result = execute_run(market, dict(run_stress=True, bootstrap_repetitions=2000), workspace / 'analysis')
         validation = validate_automated_result(result, target_as_of=target)
@@ -511,6 +533,10 @@ def main(argv=None):
     fresh = sub.add_parser('freshness')
     fresh.add_argument('--site', type=Path, required=True)
     fresh.add_argument('--event-name', default='schedule')
+    listing = sub.add_parser('exchange-directory')
+    listing.add_argument('--baseline', type=Path, required=True)
+    listing.add_argument('--target', required=True)
+    listing.add_argument('--directory', type=Path)
     receipt = sub.add_parser('confirm-input-cache')
     receipt.add_argument('--workspace', type=Path, required=True)
     receipt.add_argument('--cache-key', required=True)
@@ -534,10 +560,20 @@ def main(argv=None):
             command.add_argument('--source-commit', required=True)
             command.add_argument('--reuse-input-root', type=Path)
             command.add_argument('--archived-input-root', type=Path)
+            command.add_argument('--exchange-directory', type=Path)
+            command.add_argument('--exchange-recovery-directory', type=Path)
     args = parser.parse_args(argv)
     if args.command == 'freshness':
         for key, value in freshness(args.site, args.event_name).items():
             print(f'{key}={str(value).lower() if isinstance(value, bool) else value or "none"}')
+    elif args.command == 'exchange-directory':
+        from .integrated_exchange_refresh import exchange_observation, exchange_plan
+        data = json.loads((args.baseline / 'data/integrated-result.json').read_text())['data']
+        if args.directory is None:
+            required, recovery = exchange_plan(data, args.target)
+            print(f'required={str(required).lower()}\nrecovery={recovery or ""}')
+        else:
+            print(json.dumps(exchange_observation(data, args.target, args.directory)))
     elif args.command == 'confirm-input-cache':
         print(json.dumps(confirm_input_cache(args.workspace, args.cache_key, args.cache_id)))
     elif args.command == 'export-input-diagnostics':
@@ -546,7 +582,10 @@ def main(argv=None):
     elif args.command == 'provider-ready':
         print(json.dumps(provider_ready(args.baseline, args.output, benchmarks_only=args.benchmarks_only)))
     elif args.command == 'run':
-        print(json.dumps(run(args.workspace, args.baseline, args.candidate, args.source_commit, reuse_input_root=args.reuse_input_root, archived_input_root=args.archived_input_root)))
+        print(json.dumps(run(args.workspace, args.baseline, args.candidate, args.source_commit,
+                             reuse_input_root=args.reuse_input_root, archived_input_root=args.archived_input_root,
+                             exchange_directory=args.exchange_directory,
+                             exchange_recovery_directory=args.exchange_recovery_directory)))
     else:
         print(json.dumps(promote(args.workspace, args.baseline, args.candidate)))
     return 0
