@@ -111,7 +111,7 @@ function bind({charts, root, palette, finite, fmt, linePath, chartTicks, endpoin
       let output = '';
       for (const tick of chartTicks(lo,hi,chart.compact?4:5)) {
         const value = inverse(tick);
-        const label = chart.kind === 'pct' ? `${(Math.abs(value)<1e-10?0:value*100).toLocaleString('ko-KR',{maximumFractionDigits:Math.abs(hi-lo)>=.1?0:2})}%` : fmt(value);
+        const label = chart.kind === 'pct' ? `${window.QuantFormat.number(Math.abs(value)<1e-10?0:value*100)}%` : fmt(value);
         output += `<line class="grid ${value===0?'zero':''}" x1="${L}" x2="${width-R}" y1="${y(value)}" y2="${y(value)}"/><text x="${L-8}" y="${y(value)+4}" text-anchor="end">${escape(label)}</text>`;
       }
       output += `<text x="${L}" y="${height-6}">${escape(dates[0])}</text><text x="${width-R}" y="${height-6}" text-anchor="end">${escape(dates.at(-1))}</text>`;

@@ -4,7 +4,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-BASE = 'https://sonchanggi.github.io/quant-dashboard/shared/design/startup/1.1.0/'
+BASE = 'https://sonchanggi.github.io/quant-dashboard/shared/design/startup/1.2.0/'
 
 class HeadAssets(HTMLParser):
     def __init__(self):

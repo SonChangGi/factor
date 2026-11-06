@@ -40,12 +40,12 @@ function assertLabelsInside() {
 }
 
 assert.equal(date(),dates[3]);
-assert.deepEqual(values(),['30.00%','20.00%','20.00%']);
+assert.deepEqual(values(),['30%','20%','20%']);
 assert.equal(svg.querySelectorAll('.endpoint-label').length,0,'no static final-value labels remain');
 const trace = svg.querySelector('path.trace'), path = trace.getAttribute('d');
 pointer('pointermove',1);
 assert.equal(date(),dates[1]);
-assert.deepEqual(values(),['10.00%','5.00%','5.00%']);
+assert.deepEqual(values(),['10%','5%','5%']);
 assert.equal(svg.querySelector('path.trace'),trace,'hover preserves the static plot DOM');
 assert.equal(trace.getAttribute('d'),path);
 assert([...svg.querySelectorAll('.observation-label')].every(node=>node.dataset.date===dates[1]));
@@ -53,7 +53,7 @@ assertLabelsInside();
 assert.equal(second.querySelector('.observation-date').textContent,dates[3],'observation is local to the active chart');
 
 pointer('pointermove',2);
-assert.deepEqual(values(),['—','10.00%','—'],'null and absent observations are not filled forward');
+assert.deepEqual(values(),['—','10%','—'],'null and absent observations are not filled forward');
 assert.equal(svg.querySelectorAll('.dot').length,1);
 assert.equal(svg.querySelector('[data-series="0"].observation-label').dataset.value,'');
 assertLabelsInside();
@@ -84,13 +84,13 @@ legend.click();
 assert.equal(legend.getAttribute('aria-pressed'),'false');
 assert.equal(svg.querySelectorAll('path.trace').length,2);
 assert.equal(svg.querySelectorAll('.observation-label').length,2);
-assert.deepEqual(values(),['0.00%','0.00%']);
+assert.deepEqual(values(),['0%','0%']);
 assert.equal(date(),dates[0]);
 width=390; w.dispatchEvent(new w.Event('resize'));
 assert.equal(svg.getAttribute('viewBox'),'0 0 390 300');
 assert.equal(date(),dates[0]);
 assert.equal(legend.getAttribute('aria-pressed'),'false');
-assert([...svg.querySelectorAll('.observation-value')].every(node=>node.textContent==='0.00%'),'mobile value tags stay concise while the full labels remain in the readout');
+assert([...svg.querySelectorAll('.observation-value')].every(node=>node.textContent==='0%'),'mobile value tags stay concise while the full labels remain in the readout');
 assertLabelsInside();
 legend.click();
 key('Escape');
@@ -144,7 +144,7 @@ function synchronizedPeers() {
   pointer('performance','pointermove',2);
   assert.equal(date('drawdown'),dates[2],'performance hover moves the drawdown cursor to the same trading date');
   assert.equal(box('performance').querySelector('.lab-chart-values b').textContent,'—');
-  assert.equal(box('drawdown').querySelector('.lab-chart-values b').textContent,'-20.00%','each chart reads its own same-date value');
+  assert.equal(box('drawdown').querySelector('.lab-chart-values b').textContent,'-20%','each chart reads its own same-date value');
   assert.equal(date('partial'),dates[3],'a peer with no exact date is unchanged instead of selecting a nearest date');
   assert.equal(pinned('drawdown'),'false');
   pointer('performance','pointermove',1);

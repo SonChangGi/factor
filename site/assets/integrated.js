@@ -4,7 +4,7 @@ const VIEWS=['current','explore','compare','experiments','data'];
 const palette=['#3182f6','#7c3aed','#008768','#8b95a1','#b76e00'];
 const escape=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const finite=v=>typeof v==='number'&&Number.isFinite(v);
-const fmt=(v,kind='number')=>!finite(v)?'—':kind==='pct'?`${(v*100).toFixed(2)}%`:kind==='score'?v.toFixed(1):v.toLocaleString('ko-KR',{maximumFractionDigits:2});
+const fmt=(v,kind='number')=>!finite(v)?'—':kind==='pct'?`${globalThis.QuantFormat.number(v*100)}%`:globalThis.QuantFormat.number(v);
 const labelStatus=s=>({available:'계산 완료',awaiting_first_signal:'첫 신호 대기',not_executed:'체결 없음',valuation_unavailable:'평가 보류',fixed:'고정 팩터 실험',ready:'계산 완료',selected:'선택',cash:'현금',held:'보유',blocked:'선택 보류',unavailable:'자료 부족',partial_data:'일부 기간 미확정',insufficient_data:'자료 부족',failed:'실패',research:'연구 전용',research_only:'연구 전용',deferred:'선택 보류',eligible:'통과',ineligible:'투자 제외',excluded:'투자 제외',missing:'자료 없음',risk_rejected:'위험 기준 탈락',data_error:'자료 확인 필요',completed:'완료',running:'계산 중',queued:'대기',validating:'검증 중'}[s]||s||'—');
 function valuationState(selection,entry=null){const recorded=entry?.holdingsAsOf||selection.holdingsAsOf||selection.nav?.at(-1)?.date||null;const points=(selection.nav||[]).filter(p=>!recorded||p.date<=recorded);const last=points.filter(p=>finite(p.value)).at(-1);return {recordedAt:recorded,valuedAt:last?.date||null,pending:!last||last.date!==recorded||!finite(points.at(-1)?.value)};}
 function valuationLabel(selection,entry=null){const v=valuationState(selection,entry);return `모형 보유 · 평가 ${v.valuedAt||'—'}${v.pending?` · 평가 보류${v.recordedAt?' (기록 '+v.recordedAt+')':''}`:''}`;}
