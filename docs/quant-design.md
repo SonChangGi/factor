@@ -1,6 +1,6 @@
 # 공통 웹 디자인
 
-[Quant Research 웹 디자인 지침 2.9.0](https://github.com/SonChangGi/quant-dashboard/blob/main/docs/web-design.md)을 기준으로 유지합니다.
+[Quant Research 웹 디자인 지침 2.10.0](https://github.com/SonChangGi/quant-dashboard/blob/main/docs/web-design.md)을 기준으로 유지합니다.
 
 - 공통 UI 0.7.0 · startup 1.2.0 · QuantRange 1.3.0 · QuantFormat 1.0.0을 사용합니다.
 - head의 선언 순서는 프로젝트·내비게이션 CSS → 공통 first-paint CSS → 동기 `start.js` → 앱 defer/module → 내비게이션 defer입니다. 공통 초기화는 중복 로드하지 않습니다.
@@ -13,3 +13,5 @@
 자동 생성·승격·패키징에는 [디자인 계약 1.0.0](https://github.com/SonChangGi/quant-dashboard/tree/main/shared/design/contracts/1.0.0)의 동일 Python guard와 JSON을 사용합니다. 구버전 pin, 누락·중복 loader, 비동기 startup, 로딩 순서 위반은 기존 정상 결과를 교체하기 전에 차단합니다. 계약 업데이트 시 두 파일을 함께 갱신합니다.
 
 프로젝트별 검증과 배포 규칙은 저장소의 기존 지침을 함께 따릅니다.
+
+현재 Factor 생성기는 통합 화면 하나만 만들고 Hub 링크는 공통 대시보드를 사용합니다. 기존 Momentum CLI·Control JSON과 검증된 과거 preview는 별도 소비자가 있어 유지합니다.

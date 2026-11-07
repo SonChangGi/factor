@@ -12,7 +12,7 @@ OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 VECLIB_MAXIMUM_THREAD
 ```
 
 - 통합 화면: http://127.0.0.1:50073/
-- 통합 Hub: http://127.0.0.1:50073/hub/
+- 공통 Hub: https://sonchanggi.github.io/quant-dashboard/
 - 실험 목록: `GET /api/integrated/runs`
 - 실험 실행: `POST /api/integrated/runs`
 

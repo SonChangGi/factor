@@ -127,7 +127,6 @@ function dataSummary(data){
 const api={refreshNotice,dataSummary,strategySeries,capitalSeries,filteredFactors,validateFixedHistory,fixedHoldingSnapshot,positivePage,symbolPageData,periodPerformance,commonPeriodComparison,meanBuyIC,cashState,cashSummary,runtimeAccess,isLocalHost,riskNote,auditNotice,candidateStatus,candidateReason,sortedHoldings,chartTicks,endpointPositions,stressLabel,validate,readState,csv,linePath,commonSeries,fmt,metricText,executionLabel,sortedCandidates,validLegacy,valuationState};
 if(typeof module!=='undefined')module.exports=api;
 if(typeof document==='undefined')return;
-if(isLocalHost(location.hostname)){const brand=document.querySelector('.quant-shared-nav__brand');if(brand)brand.href='hub/';}
 let runtime={status:isLocalHost(location.hostname)?'checking':'static',apiBase:'/api/integrated'};
 let refreshStatus=null,baseResult=null,copiedFactor=null,resultNavigation=0,chartSerial=0;
 const runResults=new Map();
