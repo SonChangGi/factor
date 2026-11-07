@@ -199,7 +199,9 @@ def validate_history_publication(site, manifest, result):
 
 
 def validate(site=ROOT / 'site'):
+    from factor_lab.design_contract.verify_design import verify_html
     site = Path(site)
+    verify_html((site / 'index.html').read_text(encoding='utf-8'), 'factor')
     manifest = json.loads((site / 'publication.json').read_text())
     assert manifest['schemaVersion'] in {'integrated-publication/v1', 'integrated-publication/v2'}
     assert manifest['status'] == 'passed'

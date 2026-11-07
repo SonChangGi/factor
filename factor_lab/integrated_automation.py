@@ -513,6 +513,8 @@ def promote(workspace, baseline, candidate):
         raise ValueError('Validated raw inputs were not confirmed in bounded cache')
     if tree_hash(candidate) != status['candidateHash'] or tree_hash(baseline) != status['baselineHash']:
         raise ValueError('Candidate or baseline changed before promotion')
+    from .design_contract.verify_design import verify_html
+    verify_html((candidate / 'index.html').read_text(encoding='utf-8'), 'factor')
     backup = baseline.with_name(baseline.name + '.last-good-' + uuid.uuid4().hex)
     os.replace(baseline, backup)
     try:

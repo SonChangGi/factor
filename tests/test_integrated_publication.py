@@ -60,7 +60,7 @@ def test_legacy_control_artifacts_remain_exact_and_cannot_replace_integrated_res
     site, legacy = tmp_path / 'site', tmp_path / 'legacy'
     (site / 'data').mkdir(parents=True)
     legacy.mkdir()
-    (site / 'index.html').write_text('integrated UI')
+    (site / 'index.html').write_text((ROOT / 'factor_lab/web/integrated.html').read_text())
     (site / 'data/integrated-result.json').write_text('{"schema":"integrated"}')
     (legacy / 'dashboard.json').write_text('{"schema":"legacy"}')
     control = legacy / 'control-runs/v1/run/result.json'

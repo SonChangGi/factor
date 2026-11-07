@@ -19,6 +19,8 @@ def build(output, site=None, legacy=None, source_sha=None):
     legacy = Path(legacy) if legacy else ROOT / 'docs/data'
     if output.exists():
         raise FileExistsError('Choose an empty publication directory')
+    from factor_lab.design_contract.verify_design import verify_html
+    verify_html((site / 'index.html').read_text(encoding='utf-8'), 'factor')
     shutil.copytree(site, output, symlinks=False)
     from factor_lab.operational_status import validate_file
     validate_file(output)
@@ -46,6 +48,7 @@ def build(output, site=None, legacy=None, source_sha=None):
         'files': files,
     }
     (output / 'legacy-publication.json').write_text(json.dumps(manifest, ensure_ascii=False, sort_keys=True, separators=(',', ':')))
+    verify_html((output / 'index.html').read_text(encoding='utf-8'), 'factor')
     print(f'Assembled integrated site with {len(files)} unchanged legacy API artifacts')
     return manifest
 

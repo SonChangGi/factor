@@ -93,6 +93,8 @@ def prepare_promotion(tmp_path, monkeypatch):
         directory.mkdir()
     (baseline / 'good.json').write_text('old-good')
     (candidate / 'new.json').write_text('validated-new')
+    (candidate / 'index.html').write_text(
+        (Path(__file__).resolve().parents[1] / 'factor_lab/web/integrated.html').read_text())
     status = dict(state='validated', sourceCommit='source', baselineHash=automation.tree_hash(baseline),
                   candidateHash=automation.tree_hash(candidate))
     (workspace / 'status.json').write_text(json.dumps(status))
@@ -331,3 +333,17 @@ def test_raw_only_failed_input_can_be_diagnosed_without_claiming_a_market(tmp_pa
     assert not (output/'market').exists()
     with pytest.raises(FileNotFoundError):
         automation.export_input_diagnostics(tmp_path/'missing',tmp_path/'missing-export',symbols=['AVVSY'])
+
+
+def test_promotion_rejects_rehashed_old_design_without_replacing_last_good(tmp_path, monkeypatch):
+    baseline, candidate, workspace = prepare_promotion(tmp_path, monkeypatch)
+    index = candidate / 'index.html'
+    index.write_text(index.read_text().replace('/startup/1.2.0/', '/startup/1.1.0/'))
+    state_path = workspace / 'status.json'
+    state = json.loads(state_path.read_text())
+    state['candidateHash'] = automation.tree_hash(candidate)
+    state_path.write_text(json.dumps(state))
+    with pytest.raises(ValueError, match='Design contract:'):
+        automation.promote(workspace, baseline, candidate)
+    assert (baseline / 'good.json').read_text() == 'old-good'
+    assert candidate.exists() and not (workspace / 'last-good-site').exists()

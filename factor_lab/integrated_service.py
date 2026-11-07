@@ -253,6 +253,9 @@ def execute_run(market, settings, directory, comparison_factors=None, common_uni
 
 
 def build_site(directory, result):
+    from .design_contract.verify_design import verify_html
+    web = Path(__file__).parent / 'web'
+    verify_html((web / 'integrated.html').read_text(encoding='utf-8'), 'factor')
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=True)
     operational = directory / 'data/refresh-status.json'
@@ -260,7 +263,6 @@ def build_site(directory, result):
         prior = json.loads(operational.read_text())
         if prior.get('lastGood', {}).get('resultId') != result.get('resultIdentity', {}).get('resultId'):
             operational.unlink()
-    web = Path(__file__).parent / 'web'
     (directory / 'assets').mkdir(exist_ok=True)
     for source, target in [('integrated.html', 'index.html'), ('integrated.css', 'assets/integrated.css'), ('integrated.js', 'assets/integrated.js'), ('integrated_charts.js', 'assets/integrated_charts.js'), ('styles.css', 'assets/styles.css'), ('shared-nav.css', 'assets/shared-nav.css')]:
         shutil.copyfile(web / source, directory / target)
@@ -270,6 +272,7 @@ def build_site(directory, result):
         relative = 'assets/' + asset
         digest = hashlib.sha256((directory / relative).read_bytes()).hexdigest()[:12]
         body = body.replace(relative + '"', relative + '?v=' + digest + '"')
+    verify_html(body, 'factor')
     entry.write_text(body, encoding='utf-8')
     atomic_json(directory / 'data' / 'integrated-result.json', result)
     shutil.copyfile(Path(__file__).parent / 'resources' / 'integrated_legacy_map.json', directory / 'data' / 'legacy-definitions.json')

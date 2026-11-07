@@ -35,6 +35,7 @@ src = ["factor_lab", "tests"]
 
 [tool.setuptools.package-data]
 factor_lab = [
+  "design_contract/*.json",
   "resources/*.csv",
   "resources/integrated_*.json",
   "web/*.html",
