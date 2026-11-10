@@ -2,18 +2,14 @@
 'use strict';
 /* Direct range gesture: pointer drag, Alt-pan, two-touch pan/pinch; vertical touch stays native. */
 function directDrag(host,api){
- let drag=null,gesture=null,suppress=false;const off=[];
+ let drag=null,suppress=false;const off=[];
  const on=(name,fn,opts)=>{host.addEventListener(name,fn,opts);off.push(()=>host.removeEventListener(name,fn,opts));};
  const point=e=>({x:e.clientX,y:e.clientY});
- on('pointerdown',e=>{if(e.button>0)return;suppress=false;drag={...point(e),id:e.pointerId,touch:e.pointerType==='touch',pan:e.altKey,active:false,origin:api.point(e),view:api.view?.()};},{capture:true});
- on('pointermove',e=>{if(!drag||drag.id!==e.pointerId||gesture)return;const dx=e.clientX-drag.x,dy=e.clientY-drag.y;if(!drag.active){if(Math.hypot(dx,dy)<6)return;if(drag.touch&&Math.abs(dy)>Math.abs(dx)){drag=null;return;}drag.active=true;api.dragging?.(true);host.setPointerCapture?.(e.pointerId);}e.preventDefault();suppress=true;if(drag.pan)api.pan?.(dx,dy,drag.view);else api.select(drag.origin,api.point(e));},{capture:true});
+ on('pointerdown',e=>{if(e.button>0||e.pointerType==='touch')return;suppress=false;drag={...point(e),id:e.pointerId,pan:e.altKey,active:false,origin:api.point(e),view:api.view?.()};},{capture:true});
+ on('pointermove',e=>{if(!drag||drag.id!==e.pointerId)return;const dx=e.clientX-drag.x,dy=e.clientY-drag.y;if(!drag.active){if(Math.hypot(dx,dy)<6)return;drag.active=true;api.dragging?.(true);host.setPointerCapture?.(e.pointerId);}e.preventDefault();suppress=true;if(drag.pan)api.pan?.(dx,dy,drag.view);else api.select(drag.origin,api.point(e));},{capture:true});
  on('pointerup',()=>{drag=null;api.dragging?.(false);});on('pointercancel',()=>{drag=null;api.dragging?.(false);});
  on('click',e=>{if(suppress){suppress=false;e.preventDefault();e.stopImmediatePropagation();return;}api.clear();},{capture:true});
  on('keydown',e=>{if(e.key==='Escape')api.clear();});
- const pair=ts=>({x:(ts[0].clientX+ts[1].clientX)/2,y:(ts[0].clientY+ts[1].clientY)/2,d:Math.max(1,Math.hypot(ts[1].clientX-ts[0].clientX,ts[1].clientY-ts[0].clientY))});
- on('touchstart',e=>{if(e.touches.length===2&&api.gesture){e.preventDefault();gesture={...pair(e.touches),view:api.view?.()};drag=null;suppress=true;}},{passive:false});
- on('touchmove',e=>{if(!gesture||e.touches.length!==2)return;e.preventDefault();const now=pair(e.touches);api.gesture?.(now.d/gesture.d,now.x-gesture.x,now.y-gesture.y,gesture.view,gesture);},{passive:false});
- on('touchend',e=>{if(e.touches.length<2){gesture=null;drag=null;}});
  host.style.touchAction='pan-y';host.style.userSelect='none';host.style.webkitUserSelect='none';return()=>{off.forEach(fn=>fn());};
 }
 
@@ -38,7 +34,7 @@ function bind({charts, root, palette, finite, fmt, linePath, chartTicks, endpoin
     const indexes = new Map(dates.map((date, index) => [date, index]));
     const points = chart.series.map(series => new Map(series.points.map(point => [point.date, point.value])));
     const enabled = chart.series.map(() => true);
-    let position = dates.length - 1, pinned = false, hovering = false, activeTouch = null, scale = 'linear';
+    let position = dates.length - 1, pinned = false, hovering = false, scale = 'linear';
     let viewStart=0,viewEnd=dates.length-1,pan=null;
     const plottable = value => finite(value) && (scale !== 'log' || value > -1);
     const transform = value => scale === 'log' ? Math.log1p(value) : value;
@@ -167,20 +163,16 @@ function bind({charts, root, palette, finite, fmt, linePath, chartTicks, endpoin
     }
     listen(svg,'pointermove',event => {
       hovering = true;
-      if (pinned && (activeTouch === null || event.pointerId !== activeTouch)) return;
+      if (pinned || event.pointerType==='touch') return;
       position = pointerIndex(event); observe();
     });
     listen(svg,'pointerdown',event => {
       const next = pointerIndex(event);
-      pinned = event.pointerType === 'touch' || !pinned || next !== position;
+      if(event.pointerType==='touch')return;
+      pinned = !pinned || next !== position;
       position = next;
-      if (event.pointerType === 'touch') {
-        activeTouch = event.pointerId;
-        /* QuantRange captures only after a real drag, preserving taps on series. */
-      }
       observe();
     });
-    for (const name of ['pointerup','pointercancel','lostpointercapture']) listen(svg,name,() => {if(name==='pointercancel'&&activeTouch!==null){pinned=false;position=dates.length-1;observe();}activeTouch = null;});
     listen(svg,'pointerleave',() => {
       hovering = false;
       if (!pinned) { position = dates.length-1; observe(); }
@@ -221,7 +213,7 @@ function bind({charts, root, palette, finite, fmt, linePath, chartTicks, endpoin
       observer.observe(box); cleanups.push(() => observer.disconnect());
     }
     let selectedRange=null;
-    const rangeOutput=document.createElement('output');rangeOutput.className='factor-range-output';rangeOutput.hidden=true;rangeOutput.setAttribute('aria-live','polite');box.append(rangeOutput);
+    const rangeOutput=document.createElement('output');rangeOutput.className='factor-range-output';rangeOutput.dataset.quantChartReadout='';rangeOutput.hidden=true;rangeOutput.setAttribute('aria-live','polite');box.append(rangeOutput);
     function paintRange(){
       svg.querySelector('.direct-range-shade')?.remove();
       if(!selectedRange)return;
@@ -234,11 +226,7 @@ function bind({charts, root, palette, finite, fmt, linePath, chartTicks, endpoin
     {
       box.classList.add('qe-direct-chart');
       const controls=box.querySelector('.lab-chart-controls')||box.insertBefore(document.createElement('div'),svg);controls.classList.add('lab-chart-controls');
-      const options=document.createElement('details');options.className='qe-chart-options';const summary=document.createElement('summary');summary.textContent='···';summary.setAttribute('aria-label','차트 옵션');options.append(summary);controls.append(options);
-      const scaleLabel=box.querySelector('.lab-scale-control');if(scaleLabel)options.append(scaleLabel);
-      for(const [label,mult] of [['확대',.8],['축소',1.25]]){const action=document.createElement('button');action.type='button';action.className='lab-button secondary';action.textContent=label;options.append(action);listen(action,'click',()=>{zoom(mult,(viewStart+viewEnd)/2);options.open=false;svg.focus();});}
-      cleanups.push(()=>{if(scaleLabel)controls.append(scaleLabel);options.remove();});
-      const reset=document.createElement('button');reset.type='button';reset.className='lab-button secondary';reset.textContent='전체 보기';reset.dataset.viewportReset='';reset.hidden=true;box.querySelector('.lab-chart-controls').append(reset);cleanups.push(()=>reset.remove());
+      const reset=document.createElement('button');reset.type='button';reset.className='lab-button secondary';reset.textContent='전체 기간';reset.dataset.quantResetView='';reset.dataset.viewportReset='';reset.hidden=true;svg.after(reset);cleanups.push(()=>reset.remove());
       function viewport(start,end){const span=Math.max(1,Math.min(dates.length-1,end-start));viewStart=Math.max(0,Math.min(dates.length-1-span,Math.round(start)));viewEnd=Math.min(dates.length-1,Math.round(viewStart+span));draw();if(comparing)for(const other of peers)if(other!==peer)other.setViewport(viewStart/(dates.length-1),viewEnd/(dates.length-1));}
       function zoom(mult,anchor=position){const span=Math.max(Math.min(10,dates.length-1),Math.min(dates.length-1,(viewEnd-viewStart)*mult));const ratio=(anchor-viewStart)/(viewEnd-viewStart||1);viewport(anchor-span*ratio,anchor+span*(1-ratio));}
       listen(reset,'click',()=>{viewport(0,dates.length-1);svg.focus();});
@@ -246,7 +234,15 @@ function bind({charts, root, palette, finite, fmt, linePath, chartTicks, endpoin
       listen(svg,'keydown',event=>{if(!['+','=','-','0'].includes(event.key))return;event.preventDefault();if(event.key==='0')viewport(0,dates.length-1);else zoom(event.key==='-'?1.25:.8,(viewStart+viewEnd)/2);});
       listen(svg,'dblclick',()=>viewport(0,dates.length-1));
       const plotWidth=()=>Math.max(1,svg.getBoundingClientRect().width*(width-L-R)/width);
-      cleanups.push(directDrag(svg,{point:pointerIndex,view:()=>[viewStart,viewEnd],clear:()=>range.clear(),select(a,b){selectedRange=[a,b].sort((a,b)=>a-b);paintRange();},pan(dx,dy,v){const delta=dx/plotWidth()*(v[1]-v[0]);viewport(v[0]-delta,v[1]-delta);},gesture(factor,dx,dy,v){const span=(v[1]-v[0])/factor,center=(v[0]+v[1])/2-dx/plotWidth()*(v[1]-v[0]);viewport(center-span/2,center+span/2);}}));
+      const compare=(a,b)=>{selectedRange=[a,b].sort((a,b)=>a-b);paintRange();};
+      const plotRect=()=>{const r=svg.getBoundingClientRect();return {width:r.width,left:L*r.width/width,right:(width-R)*r.width/width,top:T*r.height/height,bottom:(height-B)*r.height/height};};
+      const cleanupTouch=window.QuantTouchChart?.bindTouchChart(svg,{
+        hit:([x,y],clamp)=>{const p=plotRect();if(!clamp&&(x<p.left||x>p.right||y<p.top||y>p.bottom))return null;return pointerIndex({clientX:x+svg.getBoundingClientRect().left});},
+        inspect:i=>{pinned=true;position=i;observe();},compare,clear:range.clear,rangeReadout:()=>rangeOutput,
+        navigate:(previous,next)=>{const count=dates.length-1,p=plotRect();if(count<2)return;const z=window.QuantTouchChart.navigateChartWindow(viewStart/count*100,viewEnd/count*100,previous,next,p.left,p.right-p.left,0,Math.min(100,1000/count));viewport(z.start/100*count,z.end/100*count);}
+      });
+      if(cleanupTouch)cleanups.push(cleanupTouch);
+      cleanups.push(directDrag(svg,{point:pointerIndex,view:()=>[viewStart,viewEnd],clear:range.clear,select:compare,pan(dx,dy,v){const delta=dx/plotWidth()*(v[1]-v[0]);viewport(v[0]-delta,v[1]-delta);}}));
 
     }
     redraws.push(draw);

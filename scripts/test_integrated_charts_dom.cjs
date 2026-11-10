@@ -17,6 +17,11 @@ Object.defineProperty(svg,'clientHeight',{value:300});
 svg.getBoundingClientRect = () => ({left:80,width:width/2,top:0,height:150});
 const second = d.getElementById('chart-two');
 Object.defineProperty(second,'clientWidth',{get:() => width});
+const touchAdapters = new Map();
+w.QuantTouchChart = {bindTouchChart(element, callbacks) {
+  touchAdapters.set(element, callbacks);
+  return () => touchAdapters.delete(element);
+}};
 const api = bind({charts:[{id:'chart-one',series,kind:'pct',title:'누적성과'},{id:'chart-two',series:[{label:'낙폭',points:dates.map((date,i)=>({date,value:-i*.1}))}],kind:'pct',compact:true,title:'낙폭'}],root:d.getElementById('view-current'),palette:['#3182f6','#7c3aed','#008768'],finite,fmt,linePath,chartTicks,endpointPositions});
 const originalURL = w.location.href, originalMonth = d.getElementById('month').value;
 const values = () => [...box.querySelectorAll('.lab-chart-values b')].map(node => node.textContent);
@@ -95,11 +100,13 @@ legend.click();
 key('Escape');
 const stableSVG = box.querySelector('svg');
 pointer('pointerdown',0,{pointerType:'touch',pointerId:7});
-pointer('pointermove',1,{pointerType:'touch',pointerId:7});
-assert.equal(date(),dates[1],'touch drag follows observations');
-pointer('pointerup',1,{pointerType:'touch',pointerId:7});
+assert.equal(date(),dates[3],'pointer contact alone cannot pin a date');
+const touch=touchAdapters.get(svg);
+const middle=touch.hit([(58+(width-58-16)/3)/2,75]);
+assert.equal(middle,1);
+touch.inspect(middle);
 pointer('pointerleave',1,{pointerType:'touch',pointerId:7});
-assert.equal(date(),dates[1],'touch selection remains pinned after release');
+assert.equal(date(),dates[1],'touch inspection remains pinned after release');
 assert.equal(box.querySelector('svg'),stableSVG,'pointer capture target survives value updates');
 assert.equal(w.location.href,originalURL,'chart observation never writes URL state');
 assert.equal(d.getElementById('month').value,originalMonth,'chart observation never changes the holdings month');
@@ -135,6 +142,10 @@ function synchronizedPeers() {
     Object.defineProperty(box,'clientWidth',{value:900});
     box.querySelector('svg').getBoundingClientRect=()=>({left:0,width:900});
   }
+  w.QuantTouchChart = {bindTouchChart(element, callbacks) {
+    touchAdapters.set(element, callbacks);
+    return () => touchAdapters.delete(element);
+  }};
   const api=bind({charts,root:active,palette:['#3182f6'],finite,fmt,linePath,chartTicks,endpointPositions,synchronizeDates:true});
   const box=id=>d.getElementById(id), svg=id=>box(id).querySelector('svg'), date=id=>box(id).dataset.observationDate, pinned=id=>box(id).dataset.observationPinned;
   const pointer=(id,name,index,extra={})=>{const event=new w.MouseEvent(name,{clientX:58+index/(chartDates[id].length-1)*(900-58-16),bubbles:true});for(const [key,value]of Object.entries(extra))Object.defineProperty(event,key,{value});svg(id).dispatchEvent(event);};
@@ -165,8 +176,8 @@ function synchronizedPeers() {
   key('performance','End'); assert.equal(date('drawdown'),dates[3]);
   key('drawdown','Escape');
   pointer('performance','pointerdown',0,{pointerType:'touch',pointerId:8});
-  pointer('performance','pointermove',1,{pointerType:'touch',pointerId:8});
-  pointer('performance','pointerup',1,{pointerType:'touch',pointerId:8});
+  const inspect=touchAdapters.get(svg('performance')).inspect;
+  inspect(1);
   assert(['performance','drawdown','partial'].every(id=>date(id)===dates[1]&&pinned(id)==='true'),'touch drag synchronizes the peer observation');
   assert.equal(box('outside').querySelector('svg').innerHTML,'','a chart outside the active root is neither bound nor synchronized');
   assert.equal(w.location.href,url);
