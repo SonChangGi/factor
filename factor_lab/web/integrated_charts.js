@@ -21,7 +21,7 @@ function bind({charts, root, palette, finite, fmt, linePath, chartTicks, endpoin
     const indexes = new Map(dates.map((date, index) => [date, index]));
     const points = chart.series.map(series => new Map(series.points.map(point => [point.date, point.value])));
     const enabled = chart.series.map(() => true);
-    let position = dates.length - 1, pinned = false, activeTouch = null, scale = 'linear';
+    let position = dates.length - 1, pinned = false, hovering = false, activeTouch = null, scale = 'linear';
     let viewStart=0,viewEnd=dates.length-1,pan=null;
     const plottable = value => finite(value) && (scale !== 'log' || value > -1);
     const transform = value => scale === 'log' ? Math.log1p(value) : value;
@@ -74,7 +74,7 @@ function bind({charts, root, palette, finite, fmt, linePath, chartTicks, endpoin
         output += `<g class="observation-label" data-series="${index}" data-date="${escape(date)}" data-value="${finite(value)?value:''}"><rect x="${labelX}" y="${item.y-labelHeight/2}" width="${labelWidth}" height="${labelHeight}" rx="3" fill="var(--panel)" opacity=".96"/><text class="observation-value" x="${textX}" y="${item.y+font*.34}" style="fill:${color(index)};font-size:${font}px;font-weight:650">${escape(label)}</text></g>`;
       }
       observation.innerHTML = output;
-      observation.style.display=position<viewStart||position>viewEnd?'none':'';
+      observation.style.display=position<viewStart||position>viewEnd||(!pinned&&!hovering)?'none':'';
       readout.innerHTML = `<strong>${escape(date)}</strong>` + visible.map(({series,index,value}) => `<span><i class="lab-value-dot" style="background:${color(index)}"></i>${escape(series.label)} <b>${fmt(value,chart.kind)}</b></span>`).join('');
       box.dataset.observationDate = date;
       box.dataset.observationPinned = String(pinned);
@@ -144,6 +144,7 @@ function bind({charts, root, palette, finite, fmt, linePath, chartTicks, endpoin
       cleanups.push(() => node.removeEventListener(name,handler));
     }
     listen(svg,'pointermove',event => {
+      hovering = true;
       if (pinned && (activeTouch === null || event.pointerId !== activeTouch)) return;
       position = pointerIndex(event); observe();
     });
@@ -159,6 +160,7 @@ function bind({charts, root, palette, finite, fmt, linePath, chartTicks, endpoin
     });
     for (const name of ['pointerup','pointercancel','lostpointercapture']) listen(svg,name,() => {activeTouch = null;});
     listen(svg,'pointerleave',() => {
+      hovering = false;
       if (!pinned) { position = dates.length-1; observe(); }
     });
     listen(svg,'keydown',event => {
@@ -173,16 +175,15 @@ function bind({charts, root, palette, finite, fmt, linePath, chartTicks, endpoin
     });
     for (const button of box.querySelectorAll('.lab-legend [data-series]')) {
       const index=Number(button.dataset.series);if(!Number.isInteger(index))continue;
-      const visibility=document.createElement('button');visibility.type='button';visibility.className='qr-visibility';visibility.textContent='숨기기';visibility.setAttribute('aria-label',chart.series[index].label+' 표시 전환');visibility.setAttribute('aria-pressed','true');button.after(visibility);cleanups.push(()=>visibility.remove());
+      button.setAttribute('aria-label',chart.series[index].label+' 표시 전환');
       function toggle(){
         if(enabled[index]&&enabled.filter(Boolean).length===1)return;
-        enabled[index]=!enabled[index];visibility.textContent=enabled[index]?'숨기기':'표시';visibility.setAttribute('aria-pressed',String(enabled[index]));button.setAttribute('aria-pressed',String(enabled[index]));
+        enabled[index]=!enabled[index];button.setAttribute('aria-pressed',String(enabled[index]));
         if(range){range.config.series=rangeSeries.filter((s,i)=>enabled[i]);range.clear();}
         draw();
         if(comparing){for(const other of peers)if(other!==peer)other.setVisible(chart.series[index].label,enabled[index]);root.querySelectorAll('[data-compare-series]').forEach(row=>{if(row.dataset.compareSeries===chart.series[index].label)row.hidden=!enabled[index];});}
       }
-      listen(visibility,'click',toggle);
-      listen(button,'click',()=>{if(comparing)toggle();else{if(!enabled[index])toggle();range?.selectSeries(String(index),{origin:'legend'});}});
+      listen(button,'click',toggle);
     }
     const scaleControl = box.querySelector('[data-chart-scale]');
     if (chart.wealth && scaleControl) listen(scaleControl,'change',() => {
@@ -200,10 +201,10 @@ function bind({charts, root, palette, finite, fmt, linePath, chartTicks, endpoin
     const rangeSeries=chart.series.map((s,i)=>({id:String(i),label:s.label,color:color(i),measure:chart.kind==='pct'?'pp':'absolute',scale:chart.kind==='pct'?100:1,unit:chart.kind==='pct'?'%':'',points:s.points.map(p=>({key:p.date,value:p.value}))}));
     const hitSeries=event=>{const matrix=svg.getScreenCTM();if(!matrix)return null;let best=null,distance=9;chart.series.forEach((series,index)=>{if(!enabled[index])return;let previous=null;for(const date of dates){const value=points[index].get(date);if(!plottable(value)){previous=null;continue}const b=new DOMPoint(x(date),y(value)).matrixTransform(matrix),a=previous||b,dx=b.x-a.x,dy=b.y-a.y,t=Math.max(0,Math.min(1,((event.clientX-a.x)*dx+(event.clientY-a.y)*dy)/(dx*dx+dy*dy||1))),d=Math.hypot(event.clientX-a.x-t*dx,event.clientY-a.y-t*dy);if(d<distance){distance=d;best=String(index)}previous=b}});return best};
     const createRange=()=>window.QuantRange?.svg({id:'factor-'+chart.id,element:svg,host:box,hitSeries,currentIndex:()=>position,onSeriesRequest:(id,ctx)=>{if(ctx.mode==='point'&&Number.isInteger(ctx.index)){position=ctx.index;pinned=true;observe()}},onReset:()=>{position=dates.length-1;pinned=false;observe()},onSeriesFocus:id=>{if(comparing)return;for(const b of box.querySelectorAll('.lab-legend [data-series]'))b.setAttribute('aria-pressed',String(b.dataset.series===id))},domain:dates.map(key=>({key,label:key})),series:rangeSeries,x:i=>x(dates[i]),plotTop:T,plotBottom:()=>height-B});
-    let range=comparing?null:createRange();cleanups.push(()=>range?.destroy());
-    if(comparing){
+    let range=null;cleanups.push(()=>range?.destroy());
+    {
       box.classList.add('qe-direct-chart');
-      const controls=box.querySelector('.lab-chart-controls');
+      const controls=box.querySelector('.lab-chart-controls')||box.insertBefore(document.createElement('div'),svg);controls.classList.add('lab-chart-controls');
       const options=document.createElement('details');options.className='qe-chart-options';const summary=document.createElement('summary');summary.textContent='···';summary.setAttribute('aria-label','차트 옵션');options.append(summary);controls.append(options);
       const scaleLabel=box.querySelector('.lab-scale-control');if(scaleLabel)options.append(scaleLabel);
       for(const [label,mult] of [['확대',.8],['축소',1.25]]){const action=document.createElement('button');action.type='button';action.className='lab-button secondary';action.textContent=label;options.append(action);listen(action,'click',()=>{zoom(mult,(viewStart+viewEnd)/2);options.open=false;svg.focus();});}
@@ -211,7 +212,7 @@ function bind({charts, root, palette, finite, fmt, linePath, chartTicks, endpoin
       listen(analysis,'click',()=>{if(range){range.destroy();range=null;analysis.textContent='구간 분석';options.append(analysis);options.open=true;summary.focus();}else{range=createRange();if(!range)return;range.config.series=rangeSeries.filter((s,i)=>enabled[i]);analysis.textContent='분석 종료';controls.append(analysis);options.open=false;svg.focus();}});
       cleanups.push(()=>{if(scaleLabel)controls.append(scaleLabel);options.remove();analysis.remove();});
       const reset=document.createElement('button');reset.type='button';reset.className='lab-button secondary';reset.textContent='전체 보기';reset.dataset.viewportReset='';reset.hidden=true;box.querySelector('.lab-chart-controls').append(reset);cleanups.push(()=>reset.remove());
-      function viewport(start,end){const span=Math.max(1,Math.min(dates.length-1,end-start));viewStart=Math.max(0,Math.min(dates.length-1-span,Math.round(start)));viewEnd=Math.min(dates.length-1,Math.round(viewStart+span));draw();for(const other of peers)if(other!==peer)other.setViewport(viewStart/(dates.length-1),viewEnd/(dates.length-1));}
+      function viewport(start,end){const span=Math.max(1,Math.min(dates.length-1,end-start));viewStart=Math.max(0,Math.min(dates.length-1-span,Math.round(start)));viewEnd=Math.min(dates.length-1,Math.round(viewStart+span));draw();if(comparing)for(const other of peers)if(other!==peer)other.setViewport(viewStart/(dates.length-1),viewEnd/(dates.length-1));}
       function zoom(mult,anchor=position){const span=Math.max(Math.min(10,dates.length-1),Math.min(dates.length-1,(viewEnd-viewStart)*mult));const ratio=(anchor-viewStart)/(viewEnd-viewStart||1);viewport(anchor-span*ratio,anchor+span*(1-ratio));}
       listen(reset,'click',()=>{viewport(0,dates.length-1);svg.focus();});
       listen(svg,'wheel',event=>{event.preventDefault();if(event.shiftKey){const delta=(viewEnd-viewStart)*Math.sign(event.deltaY)*.12;viewport(viewStart+delta,viewEnd+delta);}else zoom(event.deltaY<0?.8:1.25,pointerIndex(event));},{passive:false});

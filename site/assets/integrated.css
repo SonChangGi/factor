@@ -102,3 +102,14 @@ html[data-qe-theme] .qe-direct-chart .qe-chart-options {position:relative;margin
 html[data-qe-theme] .qe-direct-chart .qe-chart-options>summary {min-width:44px;min-height:44px;line-height:44px;cursor:pointer;list-style:none;text-align:center;}
 html[data-qe-theme] .qe-direct-chart .qe-chart-options[open] {padding:8px;border:1px solid var(--qe-border);border-radius:8px;background:var(--qe-surface);}
 html[data-qe-theme] .qe-direct-chart .qe-chart-options[open] .lab-scale-control {margin:0 0 8px;}
+/* 0.4.1 direct charts: one legend, stable plotting space, contextual tools. */
+.lab-chart-wrap.qe-direct-chart {position:relative;min-width:0;}
+.lab-chart-wrap.qe-direct-chart .lab-chart {width:100%;min-width:0;height:320px;touch-action:pan-y;}
+.lab-chart-wrap.qe-direct-chart .lab-chart.compact {height:200px;}
+.lab-chart-wrap.qe-direct-chart .lab-chart-controls {align-items:flex-start;gap:8px;}
+.lab-chart-wrap.qe-direct-chart .lab-legend {flex:1;display:flex;flex-wrap:wrap;gap:6px;}
+.lab-chart-wrap.qe-direct-chart .lab-legend button {min-height:44px;padding:8px 12px;white-space:normal;text-align:left;}
+.lab-chart-wrap.qe-direct-chart .lab-legend button[aria-pressed="false"] {opacity:.45;}
+.lab-chart-wrap.qe-direct-chart .lab-chart-values {display:flex;flex-wrap:wrap;gap:8px 18px;padding:12px 0;border-top:1px solid var(--line);font-size:12px;}
+.lab-chart-wrap.qe-direct-chart .lab-chart-values span {min-width:0;overflow-wrap:anywhere;}
+@media(max-width:640px){.lab-chart-wrap.qe-direct-chart .lab-chart{height:280px}.lab-chart-wrap.qe-direct-chart .lab-chart.compact{height:180px}.lab-chart-wrap.qe-direct-chart .lab-chart-values{gap:8px 12px}.lab-chart-wrap.qe-direct-chart .lab-chart-values strong{flex-basis:100%}}

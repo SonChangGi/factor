@@ -77,10 +77,9 @@ key('End'); assert.equal(date(),dates[3]);
 key('ArrowRight'); assert.equal(date(),dates[3]);
 key('Home');
 const selectSeries=box.querySelector('.lab-legend [data-series="0"]');
-selectSeries.click();
-assert.equal(svg.querySelectorAll('path.trace').length,3,'series selection does not hide a line');
-const legend=box.querySelector('.lab-legend .qr-visibility');
+const legend=selectSeries;
 legend.click();
+assert.equal(box.querySelectorAll('.qr-visibility').length,0,'one legend control owns visibility');
 assert.equal(legend.getAttribute('aria-pressed'),'false');
 assert.equal(svg.querySelectorAll('path.trace').length,2);
 assert.equal(svg.querySelectorAll('.observation-label').length,2);
@@ -105,7 +104,7 @@ assert.equal(box.querySelector('svg'),stableSVG,'pointer capture target survives
 assert.equal(w.location.href,originalURL,'chart observation never writes URL state');
 assert.equal(d.getElementById('month').value,originalMonth,'chart observation never changes the holdings month');
 
-box.querySelectorAll('.lab-legend .qr-visibility').forEach(button=>button.click());
+box.querySelectorAll('.lab-legend [data-series]').forEach(button=>button.click());
 assert.equal(svg.querySelectorAll('path.trace').length,1,'the last visible series remains readable');
 assert.equal(svg.querySelectorAll('.observation-label').length,1);
 assert.equal(svg.querySelectorAll('.dot').length,1);
