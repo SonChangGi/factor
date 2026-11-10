@@ -61,3 +61,44 @@
 /* Preserve readable dates and horizontal table overflow on narrow screens. */
 .lab-table [data-month]{display:inline-block;min-width:10ch;white-space:nowrap;overflow-wrap:normal;word-break:normal;line-height:1.5}
 .lab-chart-controls{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}.lab-scale-control{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted-strong);white-space:nowrap}.lab-scale-control select{width:auto;min-height:32px;padding:4px 25px 4px 8px;font-size:12px}.lab-technical{margin:0 0 20px;border:1px solid var(--line);border-radius:8px;padding:14px}.lab-technical>summary{cursor:pointer;font-size:14px;font-weight:650}.lab-technical .lab-panel{margin-top:14px}.lab-technical pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:420px;overflow:auto;font-size:12px}.lab-data-counts{display:flex;gap:12px 24px;flex-wrap:wrap;font-variant-numeric:tabular-nums}.lab-refresh-note{margin:0 0 14px;color:var(--muted-strong);font-size:13px}
+
+/* Quant design engine 0.4.0 — existing renderer adapter. */
+:root[data-qe-theme] { --bg:var(--qe-bg); --panel:var(--qe-surface); --page:var(--qe-surface); --surface:var(--qe-raised); --surface-soft:var(--qe-raised); --ink:var(--qe-text); --text:var(--qe-text); --muted:var(--qe-muted); --line:var(--qe-border); --border:var(--qe-border); --accent:var(--qe-accent); --accent-strong:var(--qe-accent); --good:var(--qe-positive); --bad:var(--qe-negative); --qr-bg:var(--qe-bg); --qr-page:var(--qe-surface); --qr-surface:var(--qe-surface); --qr-surface-soft:var(--qe-raised); --qr-text:var(--qe-text); --qr-text-strong:var(--qe-text); --qr-text-muted:var(--qe-muted); --qr-border:var(--qe-border); --qr-primary:var(--qe-accent); --qr-primary-strong:var(--qe-accent); --qr-chart-text:var(--qe-muted); --qr-chart-grid:var(--qe-border); }
+html[data-qe-theme] body { background:var(--qe-bg); color:var(--qe-text); font-variant-numeric:tabular-nums; }
+html[data-qe-theme] :is(.panel,.metric-card,.lab-panel,.lab-stat,.signal-card) { padding:var(--qe-card-inset); border-radius:var(--qe-card-radius); border-color:var(--qe-border); background:var(--qe-surface); min-width:0; }
+html[data-qe-theme] :is(button,input,select,summary) { min-height:36px; }
+html[data-qe-theme] :is(button,input,select,textarea):focus-visible { outline:2px solid var(--qe-accent); outline-offset:3px; }
+html[data-qe-theme] :is(td,th) { padding:12px 14px; line-height:1.5; }
+html[data-qe-theme] :is(.table-wrap,.lab-table-wrap) { overflow:auto; overscroll-behavior-x:contain; scrollbar-color:var(--qe-border) transparent; }
+html[data-qe-theme] .leader-item { padding:16px 18px; gap:14px; min-height:72px; border-radius:var(--qe-card-radius); }
+html[data-qe-theme] .leader-item :is(strong,span,small) { min-width:0; }
+html[data-qe-theme] .lab-chart-controls { gap:12px; align-items:center; }
+html[data-qe-theme] .lab-scale-control { margin-left:auto; }
+@media(max-width:640px) { html[data-qe-theme] :is(.panel,.metric-card,.lab-panel,.lab-stat,.signal-card) { padding:var(--qe-card-inset-mobile); } html[data-qe-theme] :is(button,select,summary) { min-height:40px; } html[data-qe-theme] .leader-item { grid-template-columns:48px minmax(0,1fr) auto; gap:10px; padding:16px 18px; } html[data-qe-theme] :is(td,th) { padding:11px 12px; } }
+
+/* Legacy range adapters keep their actions in one optional disclosure. */
+html[data-qe-theme] .qr-visibility { opacity:0; }
+html[data-qe-theme] .lab-legend:is(:hover,:focus-within) .qr-visibility { opacity:1; }
+html[data-qe-theme] .qe-chart-options { margin:8px 0; }
+html[data-qe-theme] .qe-chart-options > summary { width:40px; cursor:pointer; list-style:none; text-align:center; margin-left:auto; }
+html[data-qe-theme] .qe-chart-options:not([open]) .qr-toolbar { display:none!important; }
+html[data-qe-theme] .qr-readout.qe-idle { display:none!important; }
+
+html[data-qe-theme] .lab-chart-wrap .qr-toolbar { opacity:0; transition:opacity .15s; }
+html[data-qe-theme] .lab-chart-wrap:is(:hover,:focus-within) .qr-toolbar { opacity:1; }
+
+/* Bridge the previous shared runtime's aliases to the engine tokens. */
+html[data-qe-theme], html[data-qe-theme] body.qd-v04 { --qd-bg:var(--qe-bg)!important; --qd-surface:var(--qe-surface)!important; --qd-surface-2:var(--qe-raised)!important; --qd-text:var(--qe-text)!important; --qd-muted:var(--qe-muted)!important; --qd-border:var(--qe-border)!important; --qd-accent:var(--qe-accent)!important; --bg:var(--qe-bg)!important; --panel:var(--qe-surface)!important; --surface:var(--qe-raised)!important; --text:var(--qe-text)!important; --muted:var(--qe-muted)!important; --line:var(--qe-border)!important; --accent:var(--qe-accent)!important; }
+html[data-qe-theme] .lab-scale-control { display:flex!important; align-items:center; gap:8px; width:auto!important; }
+html[data-qe-theme] .lab-scale-control select { width:auto!important; min-width:84px; }
+
+html[data-qe-theme] .qe-direct-chart .qr-visibility {display:none!important;}
+html[data-qe-theme] .qe-direct-chart .lab-legend [aria-pressed="false"] {opacity:.45;text-decoration:line-through;}
+html[data-qe-theme] .qe-direct-chart svg {touch-action:pan-y;}
+html[data-qe-theme] [data-compare-series][hidden] {display:none!important;}
+html[data-qe-theme] .qe-direct-chart button {min-height:44px;}
+
+html[data-qe-theme] .qe-direct-chart .qe-chart-options {position:relative;margin:0 0 0 auto;}
+html[data-qe-theme] .qe-direct-chart .qe-chart-options>summary {min-width:44px;min-height:44px;line-height:44px;cursor:pointer;list-style:none;text-align:center;}
+html[data-qe-theme] .qe-direct-chart .qe-chart-options[open] {padding:8px;border:1px solid var(--qe-border);border-radius:8px;background:var(--qe-surface);}
+html[data-qe-theme] .qe-direct-chart .qe-chart-options[open] .lab-scale-control {margin:0 0 8px;}

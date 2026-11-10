@@ -106,10 +106,10 @@ assert.equal(w.location.href,originalURL,'chart observation never writes URL sta
 assert.equal(d.getElementById('month').value,originalMonth,'chart observation never changes the holdings month');
 
 box.querySelectorAll('.lab-legend .qr-visibility').forEach(button=>button.click());
-assert.equal(svg.querySelectorAll('path.trace').length,0);
-assert.equal(svg.querySelectorAll('.observation-label').length,0);
-assert.equal(svg.querySelectorAll('.dot').length,0);
-assert.equal(box.querySelector('.lab-chart-values').textContent,dates[1]);
+assert.equal(svg.querySelectorAll('path.trace').length,1,'the last visible series remains readable');
+assert.equal(svg.querySelectorAll('.observation-label').length,1);
+assert.equal(svg.querySelectorAll('.dot').length,1);
+assert(box.querySelector('.lab-chart-values').textContent.includes(dates[1]));
 api.redraw();
 const frozen=svg.innerHTML;
 api.destroy();
