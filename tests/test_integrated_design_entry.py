@@ -97,7 +97,7 @@ def test_service_rejects_old_template_before_touching_existing_result(tmp_path, 
     assert not (site / 'assets').exists()
 
 
-PREFERENCES = '<script src="https://sonchanggi.github.io/quant-dashboard/shared/preferences/1.0.0/preferences.js"></script>'
+PREFERENCES = '<script src="https://sonchanggi.github.io/quant-dashboard/shared/preferences/1.0.1/preferences.js"></script>'
 
 
 def test_preferences_restore_precedes_native_theme_and_startup():
