@@ -161,6 +161,12 @@ function bind({charts, root, palette, finite, fmt, linePath, chartTicks, endpoin
       node.addEventListener(name,handler,options);
       cleanups.push(() => node.removeEventListener(name,handler));
     }
+    // SVG focus remains visible for keyboard input. Direct manipulation already
+    // has its own visual focus (observation or selected interval).
+    listen(svg,'pointerdown',()=>{svg.dataset.directInput='';},true);
+    listen(svg,'touchstart',()=>{svg.dataset.directInput='';},{capture:true,passive:true});
+    listen(svg,'keydown',()=>{delete svg.dataset.directInput;},true);
+    listen(svg,'blur',()=>{delete svg.dataset.directInput;});
     listen(svg,'pointermove',event => {
       hovering = true;
       if (pinned || event.pointerType==='touch') return;
@@ -180,10 +186,12 @@ function bind({charts, root, palette, finite, fmt, linePath, chartTicks, endpoin
     listen(svg,'keydown',event => {
       if (!['ArrowLeft','ArrowRight','Home','End','Escape'].includes(event.key)) return;
       event.preventDefault();
-      if (event.key === 'Escape') {position = dates.length-1; pinned = false;}
+      if (event.key === 'Escape') {range.clear(); position = dates.length-1; pinned = false;}
       else {
-        position = event.key === 'Home' ? 0 : event.key === 'End' ? dates.length-1 : Math.max(0,Math.min(dates.length-1,position+(event.key==='ArrowRight'?1:-1)));
+        if(event.shiftKey)keyboardAnchor??=position;else range.clear();
+        position = event.key === 'Home' ? viewStart : event.key === 'End' ? viewEnd : Math.max(viewStart,Math.min(viewEnd,position+(event.key==='ArrowRight'?1:-1)));
         pinned = true;
+        if(event.shiftKey){selectedRange=[keyboardAnchor,position].sort((a,b)=>a-b);paintRange();}
       }
       observe();
     });
@@ -212,17 +220,39 @@ function bind({charts, root, palette, finite, fmt, linePath, chartTicks, endpoin
       });
       observer.observe(box); cleanups.push(() => observer.disconnect());
     }
-    let selectedRange=null;
+    let selectedRange=null, keyboardAnchor=null;
     const rangeOutput=document.createElement('output');rangeOutput.className='factor-range-output';rangeOutput.dataset.quantChartReadout='';rangeOutput.hidden=true;rangeOutput.setAttribute('aria-live','polite');box.append(rangeOutput);
+    const presentation=window.QuantRangeReadout;
+    const presenter=presentation?.createRangeReadout(svg,rangeOutput,box);
     function paintRange(){
       svg.querySelector('.direct-range-shade')?.remove();
+      svg.querySelector('.direct-range-points')?.remove();
       if(!selectedRange)return;
-      const [a,b]=selectedRange;const left=Math.max(L,x(dates[a])),right=Math.min(width-R,x(dates[b]));
-      if(right>left)svg.insertAdjacentHTML('afterbegin',`<rect class="direct-range-shade" x="${left}" y="${T}" width="${right-left}" height="${height-T-B}" fill="#69d3cf22" stroke="#69d3cf" pointer-events="none"/>`);
-      rangeOutput.textContent=dates[a]+' → '+dates[b]+' · '+chart.series.flatMap((series,i)=>{if(!enabled[i])return [];const av=points[i].get(dates[a]),bv=points[i].get(dates[b]);const value=finite(av)&&finite(bv)?(chart.kind==='pct'?((bv-av)*100).toFixed(2)+'%p':fmt(bv-av)):'미제공';return [series.label+' '+value];}).join(' · ');rangeOutput.hidden=false;
+      box.dataset.rangeComparing='';
+      readout.hidden=true;
+      const [a,b]=selectedRange;
+      const rawLeft=x(dates[a]),rawRight=x(dates[b]);
+      const left=Math.max(L,rawLeft),right=Math.min(width-R,rawRight);
+      if(right>=left)svg.insertAdjacentHTML('afterbegin',`<rect class="direct-range-shade" x="${left}" y="${T}" width="${Math.max(1,right-left)}" height="${height-T-B}" fill="var(--accent)" fill-opacity=".12" stroke="var(--accent)" stroke-opacity=".68" pointer-events="none"/>`);
+      const rect=svg.getBoundingClientRect(),sx=rect.width/width,sy=rect.height/height, avoid=[];
+      let dots='';
+      const items=chart.series.flatMap((series,i)=>{
+        if(!enabled[i])return [];
+        const av=points[i].get(dates[a]),bv=points[i].get(dates[b]);
+        for(const [at,value] of [[rawLeft,av],[rawRight,bv]])if(at>=L&&at<=width-R&&plottable(value)){
+          avoid.push([at*sx,y(value)*sy]);
+          dots+=`<circle class="dot" cx="${at}" cy="${y(value)}" r="3.6" fill="${color(i)}"/>`;
+        }
+        const delta=finite(av)&&finite(bv)?(bv-av)*(chart.kind==='pct'?100:1):null;
+        const unit=chart.kind==='pct'?'%p':'';
+        return [{name:series.label,change:presentation?.signedChange(delta,unit)??(delta===null?'—':fmt(delta)+unit),detail:fmt(av,chart.kind)+' → '+fmt(bv,chart.kind),color:color(i)}];
+      });
+      if(dots)svg.insertAdjacentHTML('beforeend',`<g class="direct-range-points" pointer-events="none">${dots}</g>`);
+      if(presenter)presenter.show({start:dates[a],end:dates[b],items},{bounds:{left:L*sx,top:T*sy,width:(width-L-R)*sx,height:(height-T-B)*sy},band:[rawLeft*sx,rawRight*sx],avoid});
+      else {rangeOutput.textContent=dates[a]+' → '+dates[b]+' · '+items.map(item=>item.name+' '+item.change).join(' · ');rangeOutput.hidden=false;}
     }
-    const range={clear(){selectedRange=null;rangeOutput.hidden=true;svg.querySelector('.direct-range-shade')?.remove();}};
-    cleanups.push(()=>rangeOutput.remove());
+    const range={clear(){selectedRange=null;keyboardAnchor=null;rangeOutput.hidden=true;presenter?.clear();delete box.dataset.rangeComparing;readout.hidden=false;svg.querySelector('.direct-range-shade')?.remove();svg.querySelector('.direct-range-points')?.remove();}};
+    cleanups.push(()=>{range.clear();presenter?.destroy();rangeOutput.remove();});
     {
       box.classList.add('qe-direct-chart');
       const controls=box.querySelector('.lab-chart-controls')||box.insertBefore(document.createElement('div'),svg);controls.classList.add('lab-chart-controls');

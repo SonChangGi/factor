@@ -169,3 +169,7 @@ html[data-theme] body :is(.qd-focus-button,.qd-focus-tools) {display:none!import
  html[data-qe-theme] .lab-scale-control {gap:4px}
  html[data-qe-theme] .lab-scale-control select {min-height:44px}
 }
+
+.lab-chart-wrap[data-range-comparing] .chart-observation,.lab-chart-values[hidden]{display:none}
+
+.lab-chart[data-direct-input]:focus-visible{outline:none}
