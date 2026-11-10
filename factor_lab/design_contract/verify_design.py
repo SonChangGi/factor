@@ -74,6 +74,17 @@ def verify_html(html, project, navigation="static"):
         tags[start_index][2] and tags[css_index][2] and start_index == css_index + 1,
         "stylesheet must immediately precede startup in head",
     )
+    preferences_url = "https://sonchanggi.github.io/quant-dashboard/shared/preferences/1.0.0/preferences.js"
+    preferences = [(i, a, h) for i, (t, a, h) in enumerate(tags)
+                   if t == "script" and a.get("src", "").split("?")[0] == preferences_url]
+    require(len(preferences) <= 1, "duplicate preferences loader")
+    for index, attrs, in_head in preferences:
+        require(in_head and index < start_index, "preferences must precede startup in head")
+        require(
+            not any(a in attrs for a in ("async", "defer"))
+            and attrs.get("type", "") in {"", "text/javascript", "application/javascript"},
+            "preferences must be blocking",
+        )
     navs = []
     for index, (tag, attrs, in_head) in enumerate(tags):
         src = attrs.get("src", "") if tag == "script" else attrs.get("href", "")
@@ -96,7 +107,7 @@ def verify_html(html, project, navigation="static"):
                 "navigation must defer after startup",
             )
             continue
-        if index == start_index:
+        if index == start_index or plain == preferences_url:
             continue
         name = urlsplit(plain).path.rsplit("/", 1)[-1]
         theme = name in CONTRACT["earlyThemeBasenames"]

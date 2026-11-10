@@ -95,3 +95,30 @@ def test_service_rejects_old_template_before_touching_existing_result(tmp_path, 
         service.build_site(site, {})
     assert previous.read_bytes() == b'unchanged last good'
     assert not (site / 'assets').exists()
+
+
+PREFERENCES = '<script src="https://sonchanggi.github.io/quant-dashboard/shared/preferences/1.0.0/preferences.js"></script>'
+
+
+def test_preferences_restore_precedes_native_theme_and_startup():
+    for path in [ROOT / 'factor_lab/web/integrated.html', ROOT / 'site/index.html']:
+        html = path.read_text()
+        assert html.count(PREFERENCES) == 1
+        assert html.index(PREFERENCES) < html.index('quant-research-theme') < html.index(BASE + 'start.js')
+
+
+@pytest.mark.parametrize('mutation', ['duplicate', 'defer', 'async', 'module', 'late', 'untrusted'])
+def test_preferences_cannot_bypass_startup_contract(mutation):
+    html = (ROOT / 'site/index.html').read_text()
+    if mutation == 'duplicate':
+        html = html.replace(PREFERENCES, PREFERENCES * 2)
+    elif mutation in {'defer', 'async'}:
+        html = html.replace(PREFERENCES, PREFERENCES.replace('<script ', '<script ' + mutation + ' '))
+    elif mutation == 'module':
+        html = html.replace(PREFERENCES, PREFERENCES.replace('<script ', '<script type="module" '))
+    elif mutation == 'late':
+        html = html.replace(PREFERENCES, '').replace('</head>', PREFERENCES + '</head>')
+    else:
+        html = html.replace(PREFERENCES, PREFERENCES.replace('sonchanggi.github.io', 'example.com'))
+    with pytest.raises(ValueError, match='Design contract:'):
+        verify_html(html, 'factor')
