@@ -113,3 +113,16 @@ html[data-qe-theme] .qe-direct-chart .qe-chart-options[open] .lab-scale-control 
 .lab-chart-wrap.qe-direct-chart .lab-chart-values {display:flex;flex-wrap:wrap;gap:8px 18px;padding:12px 0;border-top:1px solid var(--line);font-size:12px;}
 .lab-chart-wrap.qe-direct-chart .lab-chart-values span {min-width:0;overflow-wrap:anywhere;}
 @media(max-width:640px){.lab-chart-wrap.qe-direct-chart .lab-chart{height:280px}.lab-chart-wrap.qe-direct-chart .lab-chart.compact{height:180px}.lab-chart-wrap.qe-direct-chart .lab-chart-values{gap:8px 12px}.lab-chart-wrap.qe-direct-chart .lab-chart-values strong{flex-basis:100%}}
+/* Chart-first order is explicit: shared shell styles must not promote readouts. */
+html[data-qe-theme] body.integrated-app.qd-v04 .lab-chart-wrap.qe-direct-chart {display:flex!important;flex-direction:column!important;gap:0!important;}
+html[data-qe-theme] body.integrated-app.qd-v04 .lab-chart-wrap.qe-direct-chart>.lab-chart-controls {order:0!important;margin:0 0 4px!important;align-items:center!important;}
+html[data-qe-theme] body.integrated-app.qd-v04 .lab-chart-wrap.qe-direct-chart>.lab-chart {order:1!important;}
+html[data-qe-theme] body.integrated-app.qd-v04 .lab-chart-wrap.qe-direct-chart>.lab-chart-values {order:2!important;margin:0!important;border-bottom:0!important;padding:10px 0 6px!important;}
+html[data-qe-theme] body.integrated-app.qd-v04 .lab-chart-wrap.qe-direct-chart>.lab-chart-help {order:3!important;}
+html[data-qe-theme] body.integrated-app.qd-v04 .lab-chart-wrap.qe-direct-chart .lab-legend {gap:0 12px!important;margin:0!important;align-items:center!important;}
+html[data-qe-theme] body.integrated-app.qd-v04 .lab-chart-wrap.qe-direct-chart .lab-legend button[aria-pressed] {color:var(--series-color)!important;background:transparent!important;border:0!important;box-shadow:none!important;border-radius:3px!important;min-height:44px!important;min-width:44px!important;width:auto!important;padding:4px 0!important;font-size:12px!important;line-height:1.3!important;font-weight:500!important;gap:6px!important;}
+html[data-qe-theme] body.integrated-app.qd-v04 .lab-chart-wrap.qe-direct-chart .lab-legend .lab-swatch {width:18px!important;border-top-color:var(--series-color)!important;flex:none;}
+html[data-qe-theme] body.integrated-app.qd-v04 .lab-chart-wrap.qe-direct-chart .lab-legend [data-benchmark="true"] .lab-swatch {border-top-style:dashed!important;}
+html[data-qe-theme] body.integrated-app.qd-v04 .lab-chart-wrap.qe-direct-chart .lab-legend button[aria-pressed="false"] {opacity:.45!important;}
+html[data-qe-theme] body.integrated-app.qd-v04 .lab-chart-wrap.qe-direct-chart .trace,
+html[data-qe-theme] body.integrated-app.qd-v04 .lab-chart-wrap.qe-direct-chart .lab-swatch {filter:none!important;}

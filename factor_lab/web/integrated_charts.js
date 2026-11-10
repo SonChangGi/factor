@@ -28,7 +28,8 @@ function bind({charts, root, palette, finite, fmt, linePath, chartTicks, endpoin
     const inverse = value => scale === 'log' ? Math.expm1(value) : value;
     let width = 900, height = chart.compact ? 150 : 300, y, observation;
     const L = 58, R = 16, T = 24, B = 28;
-    const color = index => palette[index % palette.length];
+    const isBenchmark = index => chart.series[index]?.label === 'SPY' || chart.series[index]?.id === 'SPY';
+    const color = index => isBenchmark(index) ? (document.documentElement.dataset.theme === 'dark' ? '#b7c2c6' : '#5f6f76') : palette[index % palette.length];
     const x = date => L + (indexes.get(date)-viewStart) / Math.max(1, viewEnd-viewStart) * (width - L - R);
 
     function updateObservation() {
@@ -123,7 +124,9 @@ function bind({charts, root, palette, finite, fmt, linePath, chartTicks, endpoin
         output += `<text x="${x(date)}" y="${height-6}" text-anchor="middle">${escape(date.slice(0,7))}</text>`;
       }
       chart.series.forEach((series,index) => {
-        if (enabled[index]) output += `<path class="trace" data-qr-series-id="${index}" stroke="${color(index)}" d="${linePath(dates.slice(viewStart,viewEnd+1).map(date => {const value=points[index].get(date);return {date,value:plottable(value)?value:null};}),x,y)}"/>`;
+        const legend=box.querySelector(`.lab-legend button[data-series="${index}"]`);
+        if(legend){legend.style.setProperty('--series-color',color(index));legend.style.setProperty('color',color(index),'important');legend.style.setProperty('background','transparent','important');legend.style.setProperty('border','0','important');legend.dataset.benchmark=String(isBenchmark(index));const swatch=legend.querySelector('.lab-swatch');if(swatch)swatch.style.setProperty('--series-color',color(index));}
+        if (enabled[index]) output += `<path class="trace" data-qr-series-id="${index}" stroke="${color(index)}" ${isBenchmark(index)?'stroke-dasharray="5 4"':''} d="${linePath(dates.slice(viewStart,viewEnd+1).map(date => {const value=points[index].get(date);return {date,value:plottable(value)?value:null};}),x,y)}"/>`;
       });
       svg.innerHTML = `<g class="chart-plot">${output}</g><g class="chart-observation" style="pointer-events:none"></g>`;
       observation = svg.querySelector('.chart-observation');
@@ -229,6 +232,7 @@ function bind({charts, root, palette, finite, fmt, linePath, chartTicks, endpoin
   function redraw() {if (!destroyed) redraws.forEach(draw => draw());}
   if (window) {
     window.addEventListener('resize',redraw);
+    if(window.MutationObserver){const observer=new window.MutationObserver(redraw);observer.observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});cleanups.push(()=>observer.disconnect());}
     cleanups.push(() => window.removeEventListener('resize',redraw));
   }
   return {redraw,destroy() {destroyed = true; cleanups.splice(0).forEach(cleanup => cleanup());}};
