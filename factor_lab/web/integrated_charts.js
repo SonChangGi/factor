@@ -1,5 +1,22 @@
 (function (scope) {
 'use strict';
+/* Direct range gesture: pointer drag, Alt-pan, two-touch pan/pinch; vertical touch stays native. */
+function directDrag(host,api){
+ let drag=null,gesture=null,suppress=false;const off=[];
+ const on=(name,fn,opts)=>{host.addEventListener(name,fn,opts);off.push(()=>host.removeEventListener(name,fn,opts));};
+ const point=e=>({x:e.clientX,y:e.clientY});
+ on('pointerdown',e=>{if(e.button>0)return;suppress=false;drag={...point(e),id:e.pointerId,touch:e.pointerType==='touch',pan:e.altKey,active:false,origin:api.point(e),view:api.view?.()};},{capture:true});
+ on('pointermove',e=>{if(!drag||drag.id!==e.pointerId||gesture)return;const dx=e.clientX-drag.x,dy=e.clientY-drag.y;if(!drag.active){if(Math.hypot(dx,dy)<6)return;if(drag.touch&&Math.abs(dy)>Math.abs(dx)){drag=null;return;}drag.active=true;host.setPointerCapture?.(e.pointerId);}e.preventDefault();suppress=true;if(drag.pan)api.pan?.(dx,dy,drag.view);else api.select(drag.origin,api.point(e));},{capture:true});
+ on('pointerup',()=>{drag=null;});on('pointercancel',()=>{drag=null;});
+ on('click',e=>{if(suppress){suppress=false;e.preventDefault();e.stopImmediatePropagation();return;}api.clear();},{capture:true});
+ on('keydown',e=>{if(e.key==='Escape')api.clear();});
+ const pair=ts=>({x:(ts[0].clientX+ts[1].clientX)/2,y:(ts[0].clientY+ts[1].clientY)/2,d:Math.max(1,Math.hypot(ts[1].clientX-ts[0].clientX,ts[1].clientY-ts[0].clientY))});
+ on('touchstart',e=>{if(e.touches.length===2&&api.gesture){e.preventDefault();gesture={...pair(e.touches),view:api.view?.()};drag=null;suppress=true;}},{passive:false});
+ on('touchmove',e=>{if(!gesture||e.touches.length!==2)return;e.preventDefault();const now=pair(e.touches);api.gesture?.(now.d/gesture.d,now.x-gesture.x,now.y-gesture.y,gesture.view,gesture);},{passive:false});
+ on('touchend',e=>{if(e.touches.length<2){gesture=null;drag=null;}});
+ host.style.touchAction='pan-y';host.style.userSelect='none';host.style.webkitUserSelect='none';return()=>{off.forEach(fn=>fn());};
+}
+
 
 const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
@@ -90,6 +107,7 @@ function bind({charts, root, palette, finite, fmt, linePath, chartTicks, endpoin
       position = index;
       pinned = nextPinned;
       updateObservation();
+      paintRange();
     }};
     peers.push(peer);
     function observe() {
@@ -134,13 +152,14 @@ function bind({charts, root, palette, finite, fmt, linePath, chartTicks, endpoin
       box.dataset.viewportStart=dates[viewStart];box.dataset.viewportEnd=dates[viewEnd];
       const reset=box.querySelector('[data-viewport-reset]');if(reset)reset.hidden=viewStart===0&&viewEnd===dates.length-1;
       updateObservation();
+      paintRange();
     }
 
     function pointerIndex(event) {
       const bounds = svg.getBoundingClientRect();
       if (!bounds.width || !finite(event.clientX)) return position;
       const svgX = (event.clientX-bounds.left)/bounds.width*width;
-      return Math.max(0,Math.min(dates.length-1,Math.round(viewStart+(svgX-L)/(width-L-R)*(viewEnd-viewStart))));
+      return Math.max(viewStart,Math.min(viewEnd,Math.round(viewStart+(svgX-L)/(width-L-R)*(viewEnd-viewStart))));
     }
     function listen(node,name,handler,options) {
       node.addEventListener(name,handler,options);
@@ -182,7 +201,7 @@ function bind({charts, root, palette, finite, fmt, linePath, chartTicks, endpoin
       function toggle(){
         if(enabled[index]&&enabled.filter(Boolean).length===1)return;
         enabled[index]=!enabled[index];button.setAttribute('aria-pressed',String(enabled[index]));
-        if(range){range.config.series=rangeSeries.filter((s,i)=>enabled[i]);range.clear();}
+        paintRange();
         draw();
         if(comparing){for(const other of peers)if(other!==peer)other.setVisible(chart.series[index].label,enabled[index]);root.querySelectorAll('[data-compare-series]').forEach(row=>{if(row.dataset.compareSeries===chart.series[index].label)row.hidden=!enabled[index];});}
       }
@@ -201,19 +220,24 @@ function bind({charts, root, palette, finite, fmt, linePath, chartTicks, endpoin
       });
       observer.observe(box); cleanups.push(() => observer.disconnect());
     }
-    const rangeSeries=chart.series.map((s,i)=>({id:String(i),label:s.label,color:color(i),measure:chart.kind==='pct'?'pp':'absolute',scale:chart.kind==='pct'?100:1,unit:chart.kind==='pct'?'%':'',points:s.points.map(p=>({key:p.date,value:p.value}))}));
-    const hitSeries=event=>{const matrix=svg.getScreenCTM();if(!matrix)return null;let best=null,distance=9;chart.series.forEach((series,index)=>{if(!enabled[index])return;let previous=null;for(const date of dates){const value=points[index].get(date);if(!plottable(value)){previous=null;continue}const b=new DOMPoint(x(date),y(value)).matrixTransform(matrix),a=previous||b,dx=b.x-a.x,dy=b.y-a.y,t=Math.max(0,Math.min(1,((event.clientX-a.x)*dx+(event.clientY-a.y)*dy)/(dx*dx+dy*dy||1))),d=Math.hypot(event.clientX-a.x-t*dx,event.clientY-a.y-t*dy);if(d<distance){distance=d;best=String(index)}previous=b}});return best};
-    const createRange=()=>window.QuantRange?.svg({id:'factor-'+chart.id,element:svg,host:box,hitSeries,currentIndex:()=>position,onSeriesRequest:(id,ctx)=>{if(ctx.mode==='point'&&Number.isInteger(ctx.index)){position=ctx.index;pinned=true;observe()}},onReset:()=>{position=dates.length-1;pinned=false;observe()},onSeriesFocus:id=>{if(comparing)return;for(const b of box.querySelectorAll('.lab-legend [data-series]'))b.setAttribute('aria-pressed',String(b.dataset.series===id))},domain:dates.map(key=>({key,label:key})),series:rangeSeries,x:i=>x(dates[i]),plotTop:T,plotBottom:()=>height-B});
-    let range=null;cleanups.push(()=>range?.destroy());
+    let selectedRange=null;
+    const rangeOutput=document.createElement('output');rangeOutput.className='factor-range-output';rangeOutput.hidden=true;rangeOutput.setAttribute('aria-live','polite');box.append(rangeOutput);
+    function paintRange(){
+      svg.querySelector('.direct-range-shade')?.remove();
+      if(!selectedRange)return;
+      const [a,b]=selectedRange;const left=Math.max(L,x(dates[a])),right=Math.min(width-R,x(dates[b]));
+      if(right>left)svg.insertAdjacentHTML('afterbegin',`<rect class="direct-range-shade" x="${left}" y="${T}" width="${right-left}" height="${height-T-B}" fill="#69d3cf22" stroke="#69d3cf" pointer-events="none"/>`);
+      rangeOutput.textContent=dates[a]+' → '+dates[b]+' · '+chart.series.flatMap((series,i)=>{if(!enabled[i])return [];const av=points[i].get(dates[a]),bv=points[i].get(dates[b]);const value=finite(av)&&finite(bv)?(chart.kind==='pct'?((bv-av)*100).toFixed(2)+'%p':fmt(bv-av)):'미제공';return [series.label+' '+value];}).join(' · ');rangeOutput.hidden=false;
+    }
+    const range={clear(){selectedRange=null;rangeOutput.hidden=true;svg.querySelector('.direct-range-shade')?.remove();}};
+    cleanups.push(()=>rangeOutput.remove());
     {
       box.classList.add('qe-direct-chart');
       const controls=box.querySelector('.lab-chart-controls')||box.insertBefore(document.createElement('div'),svg);controls.classList.add('lab-chart-controls');
       const options=document.createElement('details');options.className='qe-chart-options';const summary=document.createElement('summary');summary.textContent='···';summary.setAttribute('aria-label','차트 옵션');options.append(summary);controls.append(options);
       const scaleLabel=box.querySelector('.lab-scale-control');if(scaleLabel)options.append(scaleLabel);
       for(const [label,mult] of [['확대',.8],['축소',1.25]]){const action=document.createElement('button');action.type='button';action.className='lab-button secondary';action.textContent=label;options.append(action);listen(action,'click',()=>{zoom(mult,(viewStart+viewEnd)/2);options.open=false;svg.focus();});}
-      const analysis=document.createElement('button');analysis.type='button';analysis.className='lab-button secondary';analysis.textContent='구간 분석';options.append(analysis);
-      listen(analysis,'click',()=>{if(range){range.destroy();range=null;analysis.textContent='구간 분석';options.append(analysis);options.open=true;summary.focus();}else{range=createRange();if(!range)return;range.config.series=rangeSeries.filter((s,i)=>enabled[i]);analysis.textContent='분석 종료';controls.append(analysis);options.open=false;svg.focus();}});
-      cleanups.push(()=>{if(scaleLabel)controls.append(scaleLabel);options.remove();analysis.remove();});
+      cleanups.push(()=>{if(scaleLabel)controls.append(scaleLabel);options.remove();});
       const reset=document.createElement('button');reset.type='button';reset.className='lab-button secondary';reset.textContent='전체 보기';reset.dataset.viewportReset='';reset.hidden=true;box.querySelector('.lab-chart-controls').append(reset);cleanups.push(()=>reset.remove());
       function viewport(start,end){const span=Math.max(1,Math.min(dates.length-1,end-start));viewStart=Math.max(0,Math.min(dates.length-1-span,Math.round(start)));viewEnd=Math.min(dates.length-1,Math.round(viewStart+span));draw();if(comparing)for(const other of peers)if(other!==peer)other.setViewport(viewStart/(dates.length-1),viewEnd/(dates.length-1));}
       function zoom(mult,anchor=position){const span=Math.max(Math.min(10,dates.length-1),Math.min(dates.length-1,(viewEnd-viewStart)*mult));const ratio=(anchor-viewStart)/(viewEnd-viewStart||1);viewport(anchor-span*ratio,anchor+span*(1-ratio));}
@@ -221,9 +245,9 @@ function bind({charts, root, palette, finite, fmt, linePath, chartTicks, endpoin
       listen(svg,'wheel',event=>{event.preventDefault();if(event.shiftKey){const delta=(viewEnd-viewStart)*Math.sign(event.deltaY)*.12;viewport(viewStart+delta,viewEnd+delta);}else zoom(event.deltaY<0?.8:1.25,pointerIndex(event));},{passive:false});
       listen(svg,'keydown',event=>{if(!['+','=','-','0'].includes(event.key))return;event.preventDefault();if(event.key==='0')viewport(0,dates.length-1);else zoom(event.key==='-'?1.25:.8,(viewStart+viewEnd)/2);});
       listen(svg,'dblclick',()=>viewport(0,dates.length-1));
-      listen(svg,'pointerdown',event=>{if(range||viewEnd-viewStart===dates.length-1)return;pan={x:event.clientX,start:viewStart,end:viewEnd};svg.setPointerCapture?.(event.pointerId);});
-      listen(svg,'pointermove',event=>{if(!pan||!event.buttons||range)return;const dx=(event.clientX-pan.x)/(svg.getBoundingClientRect().width||width)*(pan.end-pan.start);viewport(pan.start-dx,pan.end-dx);});
-      for(const name of ['pointerup','pointercancel','lostpointercapture'])listen(svg,name,()=>{pan=null;});
+      const plotWidth=()=>Math.max(1,svg.getBoundingClientRect().width*(width-L-R)/width);
+      cleanups.push(directDrag(svg,{point:pointerIndex,view:()=>[viewStart,viewEnd],clear:()=>range.clear(),select(a,b){selectedRange=[a,b].sort((a,b)=>a-b);paintRange();},pan(dx,dy,v){const delta=dx/plotWidth()*(v[1]-v[0]);viewport(v[0]-delta,v[1]-delta);},gesture(factor,dx,dy,v){const span=(v[1]-v[0])/factor,center=(v[0]+v[1])/2-dx/plotWidth()*(v[1]-v[0]);viewport(center-span/2,center+span/2);}}));
+
     }
     redraws.push(draw);
     draw();

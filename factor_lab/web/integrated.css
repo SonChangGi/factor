@@ -126,3 +126,12 @@ html[data-qe-theme] body.integrated-app.qd-v04 .lab-chart-wrap.qe-direct-chart .
 html[data-qe-theme] body.integrated-app.qd-v04 .lab-chart-wrap.qe-direct-chart .lab-legend button[aria-pressed="false"] {opacity:.45!important;}
 html[data-qe-theme] body.integrated-app.qd-v04 .lab-chart-wrap.qe-direct-chart .trace,
 html[data-qe-theme] body.integrated-app.qd-v04 .lab-chart-wrap.qe-direct-chart .lab-swatch {filter:none!important;}
+.factor-range-output {order:3;display:block;padding:10px 0;color:var(--qe-text);font-size:12px;line-height:1.7;overflow-wrap:anywhere;}
+.factor-range-output[hidden] {display:none;}
+
+/* Pinned shared shell 0.4.2 SHA256 5c9cf965555b796dbf2ed864d00c3bc9ef4bd0c09fe8a3fb5543c082a61cf417 */
+/* Quant 0.4.2: shell roles only. Load explicitly after project styles. */
+html[data-theme="dark"]{--qs-bg:#101416;--qs-surface:#171d20;--qs-raised:#20282c;--qs-text:#edf3f2;--qs-muted:#a6b4b6;--qs-border:#364247;--qs-accent:#69d3cf}
+html[data-theme="light"]{--qs-bg:#f2f5f4;--qs-surface:#ffffff;--qs-raised:#e9efed;--qs-text:#172725;--qs-muted:#536762;--qs-border:#c6d3ce;--qs-accent:#007e79}
+html[data-theme] body.qd-v04{background:var(--qs-bg)!important;color:var(--qs-text)!important}
+html[data-theme] body.qd-v04 :is(.qd-sidebar,.qd-shell){--qd-bg:var(--qs-bg)!important;--qd-surface:var(--qs-surface)!important;--qd-raised:var(--qs-raised)!important;--qd-text:var(--qs-text)!important;--qd-muted:var(--qs-muted)!important;--qd-border:var(--qs-border)!important;--qd-accent:var(--qs-accent)!important;--qd-soft:var(--qs-raised)!important;background:var(--qs-bg)!important;color:var(--qs-text)!important;border-color:var(--qs-border)!important}
