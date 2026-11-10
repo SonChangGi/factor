@@ -6,8 +6,8 @@ function directDrag(host,api){
  const on=(name,fn,opts)=>{host.addEventListener(name,fn,opts);off.push(()=>host.removeEventListener(name,fn,opts));};
  const point=e=>({x:e.clientX,y:e.clientY});
  on('pointerdown',e=>{if(e.button>0)return;suppress=false;drag={...point(e),id:e.pointerId,touch:e.pointerType==='touch',pan:e.altKey,active:false,origin:api.point(e),view:api.view?.()};},{capture:true});
- on('pointermove',e=>{if(!drag||drag.id!==e.pointerId||gesture)return;const dx=e.clientX-drag.x,dy=e.clientY-drag.y;if(!drag.active){if(Math.hypot(dx,dy)<6)return;if(drag.touch&&Math.abs(dy)>Math.abs(dx)){drag=null;return;}drag.active=true;host.setPointerCapture?.(e.pointerId);}e.preventDefault();suppress=true;if(drag.pan)api.pan?.(dx,dy,drag.view);else api.select(drag.origin,api.point(e));},{capture:true});
- on('pointerup',()=>{drag=null;});on('pointercancel',()=>{drag=null;});
+ on('pointermove',e=>{if(!drag||drag.id!==e.pointerId||gesture)return;const dx=e.clientX-drag.x,dy=e.clientY-drag.y;if(!drag.active){if(Math.hypot(dx,dy)<6)return;if(drag.touch&&Math.abs(dy)>Math.abs(dx)){drag=null;return;}drag.active=true;api.dragging?.(true);host.setPointerCapture?.(e.pointerId);}e.preventDefault();suppress=true;if(drag.pan)api.pan?.(dx,dy,drag.view);else api.select(drag.origin,api.point(e));},{capture:true});
+ on('pointerup',()=>{drag=null;api.dragging?.(false);});on('pointercancel',()=>{drag=null;api.dragging?.(false);});
  on('click',e=>{if(suppress){suppress=false;e.preventDefault();e.stopImmediatePropagation();return;}api.clear();},{capture:true});
  on('keydown',e=>{if(e.key==='Escape')api.clear();});
  const pair=ts=>({x:(ts[0].clientX+ts[1].clientX)/2,y:(ts[0].clientY+ts[1].clientY)/2,d:Math.max(1,Math.hypot(ts[1].clientX-ts[0].clientX,ts[1].clientY-ts[0].clientY))});
@@ -180,7 +180,7 @@ function bind({charts, root, palette, finite, fmt, linePath, chartTicks, endpoin
       }
       observe();
     });
-    for (const name of ['pointerup','pointercancel','lostpointercapture']) listen(svg,name,() => {activeTouch = null;});
+    for (const name of ['pointerup','pointercancel','lostpointercapture']) listen(svg,name,() => {if(name==='pointercancel'&&activeTouch!==null){pinned=false;position=dates.length-1;observe();}activeTouch = null;});
     listen(svg,'pointerleave',() => {
       hovering = false;
       if (!pinned) { position = dates.length-1; observe(); }
