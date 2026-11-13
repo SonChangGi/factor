@@ -1,0 +1,24 @@
+{
+  "attempt": {
+    "finishedAtUtc": "2026-11-13T03:29:36.170755+00:00",
+    "missingSymbols": [],
+    "reasonCode": "ok",
+    "runAttempt": 1,
+    "runId": "43353459618",
+    "runUrl": "https://github.com/SonChangGi/factor/actions/runs/43353459618",
+    "sourceCommit": "34a9c8eff3fd0f2f13c64e92155b7e0938efd78e",
+    "startedAtUtc": "2026-11-13T02:37:26Z",
+    "status": "succeeded",
+    "targetDataAsOf": "2026-11-12"
+  },
+  "lastGood": {
+    "calculationSourceCommit": "34a9c8eff3fd0f2f13c64e92155b7e0938efd78e",
+    "codeHash": "470178ae41ed23664d9ad14a864de7d4d34fb661b1bc992677e5b50dccf48c53",
+    "dataAsOf": "2026-11-12",
+    "inputHash": "b3b5d8f5c3c8f070a04489d97a42ebc0eb750458bc83004e9b90bbc0464c2da2",
+    "resultId": "2231480b582642f4261e9fa6"
+  },
+  "schemaVersion": "factor-refresh-status/v1",
+  "status": "ok",
+  "updatedAtUtc": "2026-11-13T03:35:29.861053+00:00"
+}
