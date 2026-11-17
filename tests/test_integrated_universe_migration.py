@@ -1,5 +1,4 @@
 import json
-from pathlib import Path
 
 import pandas as pd
 import pytest
@@ -87,14 +86,3 @@ def test_migration_requires_exact_reviewed_baseline_before_any_workspace_creatio
     with pytest.raises(ValueError, match="exact reviewed"):
         migration.migrate(workspace, baseline, tmp_path / "candidate", tmp_path, current_source())
     assert not workspace.exists()
-
-
-def test_manual_migration_shares_daily_concurrency_and_has_no_collection():
-    text = (Path(__file__).resolve().parents[1] / ".github/workflows/reviewed-universe.yml").read_text()
-    assert "daily-factor-dashboard-${{ github.ref }}" in text
-    assert "schedule:" not in text
-    assert "collect_integrated_market" not in text
-    assert "--mode daily" in text and "confirm-input-cache" in text
-    assert "git push" in text and "expected_source_sha" in text
-    assert text.index("bash scripts/check_release.sh") < text.index("git commit")
-    assert "node-version: '22'" in text

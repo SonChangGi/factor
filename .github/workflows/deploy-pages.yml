@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       expected_source_sha:
-        description: Exact current main SHA requested by an authenticated producer workflow
+        description: Exact current main SHA for the preserved static publication
         required: false
         default: ''
         type: string
@@ -66,7 +66,7 @@ jobs:
           expected_sha="${REQUESTED_SOURCE_SHA:-${PUSH_SOURCE_SHA}}"
           expected_sha="${expected_sha:-${local_sha}}"
           case "${REQUEST_ORIGIN}" in
-            manual|push|daily-dashboard|daily-dashboard-watchdog|controlled-analysis|daily-refresh-status|watchdog-refresh-status) ;;
+            manual|push) ;;
             *)
               echo "Unsupported deployment request origin." >&2
               exit 1
@@ -118,7 +118,7 @@ jobs:
       - name: Install locked release runtime
         run: |
           python -m pip install uv==0.11.17
-          uv sync --locked --extra dev --extra live --python "$(command -v python)"
+          uv sync --locked --extra dev --python "$(command -v python)"
           echo "${GITHUB_WORKSPACE}/.venv/bin" >> "$GITHUB_PATH"
 
       - name: Test and validate the committed static publication
@@ -203,7 +203,7 @@ jobs:
 
   public-site-health:
     needs: deploy-pages
-    if: ${{ always() && (github.event_name == 'push' || inputs.request_origin == 'daily-dashboard' || inputs.request_origin == 'daily-dashboard-watchdog') }}
+    if: ${{ always() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 8
     permissions:

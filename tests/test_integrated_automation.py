@@ -131,46 +131,8 @@ def test_failed_candidate_promotion_rolls_back_baseline(tmp_path, monkeypatch):
     assert (baseline / 'good.json').read_text() == 'old-good'
 
 
-def test_collection_failure_records_failed_attempt_and_preserves_last_good(tmp_path, monkeypatch):
-    import sys
-    from types import ModuleType
-    import factor_lab.integrated_data as data
-    monkeypatch.setattr(automation, 'current_source', lambda: 'source')
-    validation = ModuleType('factor_lab.integrated_validation')
-    validation.validate_automated_result = lambda *a, **k: {}
-    validation.write_automated_manifest = lambda *a, **k: None
-    monkeypatch.setitem(sys.modules, validation.__name__, validation)
-    def fail(*a, **k):
-        raise ValueError('provider incomplete')
-    monkeypatch.setattr(data, 'collect_integrated_market', fail)
-    baseline, workspace, candidate = (tmp_path / s for s in ['site', 'run', 'candidate'])
-    baseline.mkdir()
-    (baseline / 'last-good.json').write_text('published')
-    (baseline / 'data').mkdir()
-    (baseline / 'data/integrated-result.json').write_text(json.dumps(
-        dict(schemaVersion='integrated-factor/v1', data=dict(asOf='2026-10-16',symbols=[]))))
-    before = automation.tree_hash(baseline)
-    with pytest.raises(ValueError, match='provider incomplete'):
-        automation.run(workspace, baseline, candidate, 'source',
-                       now=datetime(2026, 10, 20, 0, tzinfo=timezone.utc))
-    status = json.loads((workspace / 'status.json').read_text())
-    assert status['state'] == 'failed' and status['lastGoodPreserved'] is True
-    assert automation.tree_hash(baseline) == before and not candidate.exists()
 
 
-def test_weekday_workflow_cannot_reach_legacy_calculation_or_skip_validation():
-    root = Path(__file__).resolve().parents[1]
-    daily = (root / '.github/workflows/daily-dashboard.yml').read_text()
-    watchdog = (root / '.github/workflows/daily-dashboard-watchdog.yml').read_text()
-    assert 'scheduled-dashboard' not in daily
-    assert '--site site' in daily and '--site site' in watchdog
-    assert 'integrated_automation run' in daily and 'integrated_automation promote' in daily
-    assert 'validate_integrated_publication.py site' in daily
-    assert 'git push origin "HEAD:${DEFAULT_BRANCH}"' in daily
-    assert 'git push --force' not in daily and 'continue-on-error' not in daily
-    assert 'expected_source_sha="${SOURCE_SHA}"' in daily
-    assert 'gh run watch' in daily and '--exit-status' in daily
-    assert 'cron: "17 22 * * 1-5"' in daily
 
 
 def test_future_or_malformed_input_date_cannot_suppress_refresh(tmp_path):
@@ -257,23 +219,6 @@ def test_initial_coverage_contract_subtracts_only_verified_inserted_trade_quotes
     assert automation.coverage_contract_from_result(payload)==payload['data']['inputCoverage']
 
 
-def test_recovery_copies_only_provider_downloads_without_splicing_input_matrices(tmp_path):
-    import hashlib
-    old=tmp_path/'restored/raw'; old.mkdir(parents=True)
-    request=dict(start='2010-01-01',endExclusive='2026-10-20',symbols=['A'])
-    (old/'request.json').write_text(json.dumps(request))
-    (old/'downloads').mkdir();(old/'downloads/batch.json').write_text('verified-elsewhere')
-    (old/'prices.csv.gz').write_text('old matrix never copied')
-    manifest=dict(dataAsOf='2026-10-19',request=request,files={})
-    manifest['snapshotId']=hashlib.sha256(json.dumps(manifest,sort_keys=True).encode()).hexdigest()
-    (old/'manifest.json').write_text(json.dumps(manifest))
-    destination=tmp_path/'new/raw'
-    receipt=automation.seed_download_cache(old.parent,destination,'2026-10-19')
-    assert (destination/'downloads/batch.json').exists()
-    assert not (destination/'prices.csv.gz').exists() and not (destination/'manifest.json').exists()
-    assert receipt['sourceSnapshotId']==manifest['snapshotId']
-    with pytest.raises(ValueError,match='different completed session'):
-        automation.seed_download_cache(old.parent,tmp_path/'another/raw','2026-10-20')
 
 
 def test_read_only_diagnostics_exports_original_selected_columns_and_provenance(tmp_path,monkeypatch):
@@ -297,13 +242,6 @@ def test_read_only_diagnostics_exports_original_selected_columns_and_provenance(
     assert exported.BOH.iloc[0]==1.0000003854
 
 
-def test_diagnostics_job_cannot_calculate_or_publish():
-    workflow=(Path(__file__).resolve().parents[1]/'.github/workflows/daily-dashboard.yml').read_text()
-    diagnostics=workflow.split('  input-cache-diagnostics:\n',1)[1]
-    assert 'export-input-diagnostics' in diagnostics
-    assert 'integrated_automation run' not in diagnostics and 'git push' not in diagnostics
-    assert 'actions/cache/restore@' in diagnostics and 'fail-on-cache-miss: true' in diagnostics
-    assert 'inputs.diagnostics_only != true' in workflow
 
 
 def test_diagnostics_reject_invalid_symbols_and_dates_before_writing(tmp_path):

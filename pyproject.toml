@@ -16,7 +16,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-live = ["yfinance>=0.2.40", "finance-datareader>=0.9.202"]
 dev = ["pytest>=8.0", "ruff>=0.4"]
 
 [project.scripts]

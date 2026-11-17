@@ -7,7 +7,6 @@ const payloadPath = process.env.MFL_TEST_PAYLOAD || 'docs/data/grid/v1/latest.js
 const payload = JSON.parse(readFileSync(payloadPath, 'utf8'));
 const source = readFileSync('factor_lab/web/dashboard.js', 'utf8');
 const html = readFileSync('factor_lab/web/index.html', 'utf8');
-const workflow = readFileSync('.github/workflows/controlled-analysis.yml', 'utf8');
 const context = vm.createContext({
   console,
   crypto: webcrypto,
@@ -328,27 +327,5 @@ assert.match(source, /const CONTROL_API_MAX_POLLS = 2880;/);
 assert.match(source, /submit\.textContent = '분석 API 연결 필요'/);
 assert.match(source, /const controlCapabilities = await controlApiInitialization;[\s\S]*renderResearchDraftState\(\);/);
 
-assert.match(workflow, /research_inputs_json:/);
-assert.match(workflow, /control_run_id:/);
-assert.match(workflow, /control_input_schema_version:/);
-assert.match(workflow, /control_input_schema_hash:/);
-assert.match(workflow, /control_config_hash_algorithm:/);
-assert.match(workflow, /control_config_hash:/);
-assert.match(workflow, /python -m factor_lab\.control_run/);
-assert.match(workflow, /--allow-fallback "\$\{ALLOW_FALLBACK\}"/);
-assert.match(workflow, /result-manifest/);
-assert.match(workflow, /QUANT_CONTROL_WORKER_CALLBACK_TOKEN/);
-assert.match(workflow, /timeout-minutes: 210/);
-assert.match(workflow, /always\(\) && failure\(\)/);
-assert.match(workflow, /\/v1\/internal\/runs\/\$\{CONTROL_RUN_ID\}\/failure/);
-assert.match(workflow, /"providerRunId": f"github-actions:\{run_id\}"/);
-assert.match(workflow, /"errorCode": "worker_workflow_failed"/);
-assert.equal((workflow.match(/from urllib\.parse import urlsplit, urlunsplit/g) || []).length, 2);
-assert.equal((workflow.match(/parsed(?:_callback_base)?\.scheme != "https"/g) || []).length, 2);
-assert.equal((workflow.match(/parsed(?:_callback_base)?\.username/g) || []).length, 2);
-assert.equal((workflow.match(/parsed(?:_callback_base)?\.password/g) || []).length, 2);
-assert.equal((workflow.match(/parsed(?:_callback_base)?\.query/g) || []).length, 2);
-assert.equal((workflow.match(/parsed(?:_callback_base)?\.fragment/g) || []).length, 2);
-assert.equal((workflow.match(/--proto '=https'/g) || []).length, 2);
 
 console.log('PASS common remote control API and immutable artifact binding contract');

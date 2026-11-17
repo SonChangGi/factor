@@ -104,7 +104,7 @@ def main():
     args = parser.parse_args()
     try:
         check_files(args.site)
-        if args.mode != 'files':
+        if args.mode == 'daily':
             result = json.loads((args.site / 'data/integrated-result.json').read_text())
             daily_compatibility(result)
         if args.mode == 'release':

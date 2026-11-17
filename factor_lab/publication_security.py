@@ -8,6 +8,35 @@ from pathlib import Path
 from typing import Any, Iterable, Sequence
 
 
+def _sanitize_public_source_health(frame):
+    """Remove local paths and credential-shaped provider diagnostics.
+
+    Source-health rows are embedded in immutable public result artifacts and
+    participate in their hashes. Local cache filenames are neither portable nor
+    analytically meaningful; one such filename for ticker AVNS also matches the
+    Aiven service-password prefix used by push protection.
+    """
+
+    import pandas as pd
+
+    sanitized = frame.copy()
+    if "cache_path" in sanitized:
+        stable_cache_references = {"", "disabled", "package-resource"}
+
+        def sanitize_cache_path(value: object) -> object:
+            if value is None or pd.isna(value):
+                return value
+            text = str(value)
+            return text if text in stable_cache_references else PUBLIC_CACHE_REFERENCE
+
+        sanitized["cache_path"] = sanitized["cache_path"].map(sanitize_cache_path)
+    for column in sanitized.columns:
+        dtype = sanitized[column].dtype
+        if pd.api.types.is_object_dtype(dtype) or pd.api.types.is_string_dtype(dtype):
+            sanitized[column] = sanitized[column].map(redact_credential_like_text)
+    return sanitized
+
+
 @dataclass(frozen=True, slots=True)
 class SecretPattern:
     label: str

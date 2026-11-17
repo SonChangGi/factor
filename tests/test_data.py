@@ -3,15 +3,13 @@ import inspect
 import json
 import shutil
 from pathlib import Path
-from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
 import pytest
 
 from factor_lab import data
-from factor_lab.backtest import run_factor_backtest
-from factor_lab.config import FIXED_WEIGHTING_POLICY, RunConfig
+from factor_lab.config import RunConfig
 from factor_lab.data import (
     build_eligibility_mask,
     load_market_data,
@@ -19,64 +17,8 @@ from factor_lab.data import (
     write_market_data_snapshot,
 )
 from factor_lab.identity import build_result_identity
-from factor_lab.metrics import metric_summary
-from factor_lab.market_cap import MarketCapResult
 
 
-@pytest.fixture(autouse=True)
-def _stub_sec_market_caps(monkeypatch: pytest.MonkeyPatch) -> None:
-    def load_fixture_market_caps(
-        *,
-        dates: pd.DatetimeIndex,
-        raw_closes: pd.DataFrame,
-        universe: pd.DataFrame,
-        **_kwargs,
-    ) -> MarketCapResult:
-        market_caps = raw_closes.mul(100_000_000.0)
-        symbols = [
-            str(symbol)
-            for symbol in universe.get("symbol", pd.Series(dtype=object))
-            if str(symbol) in market_caps
-        ]
-        sources = pd.DataFrame(
-            [
-                {
-                    "symbol": symbol,
-                    "mapping": "fixture",
-                    "taxonomy": "fixture",
-                    "tag": "sharesOutstanding",
-                    "valueKind": "shares",
-                    "latestMarketCapAvailable": bool(
-                        pd.notna(market_caps.loc[dates.max(), symbol])
-                    ),
-                }
-                for symbol in symbols
-            ]
-        )
-        health = pd.DataFrame(
-            [
-                {
-                    "source": "sec-xbrl-point-in-time-market-cap-fixture",
-                    "status": "available",
-                    "records": len(symbols),
-                    "point_in_time_market_cap": True,
-                }
-            ]
-        )
-        covered = int(market_caps.reindex(columns=symbols).iloc[-1].notna().sum())
-        return MarketCapResult(
-            market_caps=market_caps,
-            symbol_sources=sources,
-            source_health=health,
-            observation_count=len(symbols),
-            covered_symbol_count=covered,
-            coverage_ratio=covered / max(1, len(symbols)),
-        )
-
-    monkeypatch.setattr(
-        "factor_lab.market_cap.load_sec_market_caps",
-        load_fixture_market_caps,
-    )
 
 
 def test_demo_uses_200_candidates_and_keeps_benchmark_out_of_eligibility() -> None:
@@ -416,215 +358,10 @@ def test_sparse_local_matrix_still_rejects_observed_non_positive_price(tmp_path)
         )
 
 
-def test_live_provider_non_positive_prices_are_missing_and_disclosed(monkeypatch) -> None:
-    dates = pd.bdate_range("2024-01-02", periods=260)
-    prices = pd.DataFrame(
-        {
-            "SPY": np.linspace(100.0, 120.0, len(dates)),
-            "AAA": np.linspace(10.0, 20.0, len(dates)),
-        },
-        index=dates,
-    )
-    prices.loc[dates[10], "AAA"] = 0.0
-    raw_closes = prices.copy()
-    volumes = pd.DataFrame(1_000_000.0, index=dates, columns=prices.columns)
-    acquired = SimpleNamespace(
-        live_error=None,
-        raw_prices=prices,
-        prices=prices,
-        raw_volumes=volumes,
-        volumes=volumes,
-        raw_closes=raw_closes,
-        stock_splits=pd.DataFrame(0.0, index=dates, columns=prices.columns),
-        candidate_universe=pd.DataFrame({"symbol": ["AAA"]}),
-        price_sources=pd.DataFrame(),
-        data_sources=pd.DataFrame(),
-        provider="public-test-provider",
-    )
-    monkeypatch.setattr(
-        "factor_lab.live_data.download_live_data",
-        lambda _config: acquired,
-    )
-
-    live_prices, _, dollar_volumes, *rest = data._live_inputs(RunConfig(live=True, top_n=1))
-
-    assert pd.isna(live_prices.loc[dates[10], "AAA"])
-    assert pd.isna(dollar_volumes.loc[dates[10], "AAA"])
-    notes = rest[-2]
-    assert any("adjusted_price_non_positive=1" in note for note in notes)
 
 
-def test_zero_volume_candidate_quote_blocks_halt_exit_and_terminal_metrics(
-    monkeypatch,
-) -> None:
-    dates = pd.bdate_range("2025-06-02", "2025-10-10")
-    halt_date = pd.Timestamp("2025-09-29")
-    event_date = pd.Timestamp("2025-09-09")
-    prices = pd.DataFrame(
-        {
-            "SPY": np.linspace(600.0, 620.0, len(dates)),
-            "^IXIC": np.linspace(21_000.0, 22_000.0, len(dates)),
-            "QQQ": np.linspace(520.0, 540.0, len(dates)),
-            "QMMM": 11.27,
-            "SAFE": np.linspace(50.0, 55.0, len(dates)),
-        },
-        index=dates,
-    )
-    prices.loc[event_date, "QMMM"] = 207.0
-    prices.loc[event_date + pd.offsets.BDay() : halt_date - pd.offsets.BDay(), "QMMM"] = 119.4
-    prices.loc[halt_date:, "QMMM"] = 119.4
-    volumes = pd.DataFrame(1_000_000.0, index=dates, columns=prices.columns)
-    volumes.loc[:, ["SPY", "^IXIC", "QQQ"]] = 0.0
-    volumes.loc[halt_date:, "QMMM"] = 0.0
-    acquired = SimpleNamespace(
-        live_error=None,
-        raw_prices=prices,
-        prices=prices,
-        raw_volumes=volumes,
-        volumes=volumes,
-        raw_closes=prices.copy(),
-        stock_splits=pd.DataFrame(0.0, index=dates, columns=prices.columns),
-        candidate_universe=pd.DataFrame({"symbol": ["QMMM", "SAFE", "QQQ"]}),
-        price_sources=pd.DataFrame(),
-        data_sources=pd.DataFrame(),
-        provider="public-test-provider",
-    )
-    monkeypatch.setattr(
-        "factor_lab.live_data.download_live_data",
-        lambda _config: acquired,
-    )
-    config = RunConfig(
-        live=True,
-        top_n=1,
-        max_weight=1.0,
-        selection_min_effective_names=1.0,
-        transaction_cost_bps=0.0,
-        slippage_bps=0.0,
-    )
-
-    (
-        analysis_prices,
-        analysis_volumes,
-        dollar_volumes,
-        raw_closes,
-        comparison_prices,
-        analysis_universe,
-        _,
-        _,
-        _,
-        _,
-        _,
-        hashes,
-        notes,
-        _,
-    ) = data._live_inputs(config)
-
-    assert list(analysis_universe["symbol"]) == ["QMMM", "SAFE"]
-    assert analysis_prices.loc[: halt_date - pd.offsets.BDay(), "QMMM"].notna().all()
-    assert analysis_prices.loc[halt_date:, "QMMM"].isna().all()
-    assert raw_closes.loc[halt_date:, "QMMM"].isna().all()
-    assert analysis_volumes.loc[halt_date:, "QMMM"].eq(0.0).all()
-    assert dollar_volumes.loc[halt_date:, "QMMM"].isna().all()
-    pd.testing.assert_frame_equal(
-        comparison_prices,
-        prices.loc[:, ["SPY", "^IXIC", "QQQ"]],
-    )
-    assert hashes["prices"] == data._canonical_matrix_sha256(analysis_prices)
-    assert hashes["rawCloses"] == data._canonical_matrix_sha256(raw_closes)
-    halted_quote_count = int((dates >= halt_date).sum())
-    assert any(
-        "Candidate zero-volume quotes were treated as stale/untradable" in note
-        and f"adjusted_price_zero_volume={halted_quote_count}" in note
-        and f"raw_close_zero_volume={halted_quote_count}" in note
-        and "Comparison benchmarks were not masked" in note
-        for note in notes
-    )
-
-    candidate_prices = analysis_prices.drop(columns=["SPY"])
-    scores = pd.DataFrame(
-        {"QMMM": 2.0, "SAFE": 1.0},
-        index=candidate_prices.index,
-    )
-    eligibility = candidate_prices.notna()
-    backtest = run_factor_backtest(
-        "gap_resistant_fixture",
-        FIXED_WEIGHTING_POLICY,
-        candidate_prices,
-        scores,
-        config,
-        eligibility_mask=eligibility,
-        trailing_dollar_volume=dollar_volumes,
-        trailing_market_cap=analysis_prices.mul(100_000_000.0),
-    )
-
-    assert backtest.returns.loc[event_date] == pytest.approx(207.0 / 11.27 - 1.0)
-    assert backtest.returns.loc[event_date] > 17.0
-    assert backtest.execution_statuses.loc["2025-10-01"] == "blocked_missing_held_quote"
-    assert backtest.returns.loc[halt_date:].isna().all()
-    summary = metric_summary(
-        backtest.returns,
-        backtest.turnover,
-        backtest.costs,
-        strategy_active=backtest.strategy_active,
-        execution_statuses=backtest.execution_statuses,
-        return_interval_sessions=backtest.return_interval_sessions,
-    )
-    assert summary["ending_nav_available"] is False
-    assert summary["risk_metrics_complete"] is False
-    assert summary["blocked_execution_count"] == pytest.approx(1.0)
 
 
-def test_live_comparator_prices_are_preserved_outside_the_analyzed_universe(monkeypatch) -> None:
-    dates = pd.bdate_range("2024-01-02", periods=260)
-    prices = pd.DataFrame(
-        {
-            "SPY": np.linspace(100.0, 120.0, len(dates)),
-            "^IXIC": np.linspace(15_000.0, 17_000.0, len(dates)),
-            "QQQ": np.linspace(300.0, 360.0, len(dates)),
-            "AAA": np.linspace(10.0, 20.0, len(dates)),
-        },
-        index=dates,
-    )
-    volumes = pd.DataFrame(1_000_000.0, index=dates, columns=prices.columns)
-    acquired = SimpleNamespace(
-        live_error=None,
-        raw_prices=prices,
-        prices=prices,
-        raw_volumes=volumes,
-        volumes=volumes,
-        raw_closes=prices.copy(),
-        stock_splits=pd.DataFrame(0.0, index=dates, columns=prices.columns),
-        candidate_universe=pd.DataFrame({"symbol": ["QQQ", "AAA"]}),
-        price_sources=pd.DataFrame(),
-        data_sources=pd.DataFrame(),
-        provider="public-test-provider",
-    )
-    monkeypatch.setattr(
-        "factor_lab.live_data.download_live_data",
-        lambda _config: acquired,
-    )
-
-    (
-        analysis_prices,
-        _,
-        _,
-        _,
-        comparison_prices,
-        analysis_universe,
-        _,
-        _,
-        _,
-        _,
-        _,
-        hashes,
-        _,
-        _,
-    ) = data._live_inputs(RunConfig(live=True, top_n=1))
-
-    assert list(analysis_prices.columns) == ["SPY", "AAA"]
-    assert list(comparison_prices.columns) == ["SPY", "^IXIC", "QQQ"]
-    assert list(analysis_universe["symbol"]) == ["AAA"]
-    assert hashes["comparisonPrices"] == data._canonical_matrix_sha256(comparison_prices)
 
 
 @pytest.mark.parametrize(
@@ -1115,80 +852,8 @@ def test_canonical_matrix_hash_is_datetime_unit_invariant() -> None:
     )
 
 
-def test_live_raw_close_proxy_snapshot_is_auditable_and_hash_reproducible(
-    monkeypatch, tmp_path
-) -> None:
-    dates = pd.bdate_range("2024-01-02", periods=260)
-    prices = pd.DataFrame(
-        {
-            "SPY": np.linspace(100.0, 120.0, len(dates)),
-            "AAA": np.linspace(10.0, 20.0, len(dates)),
-            "BBB": np.linspace(15.0, 30.0, len(dates)),
-        },
-        index=dates,
-    )
-    raw_closes = prices.copy()
-    raw_closes["BBB"] = np.nan
-    volumes = pd.DataFrame(1_000_000.0, index=dates, columns=prices.columns)
-    acquired = SimpleNamespace(
-        live_error=None,
-        raw_prices=prices,
-        prices=prices,
-        raw_volumes=volumes,
-        volumes=volumes,
-        raw_closes=raw_closes,
-        stock_splits=pd.DataFrame(0.0, index=dates, columns=prices.columns),
-        candidate_universe=pd.DataFrame({"symbol": ["AAA", "BBB"]}),
-        price_sources=pd.DataFrame(
-            {
-                "symbol": ["SPY", "AAA", "BBB"],
-                "price_source": ["fixture-adjusted"] * 3,
-            }
-        ),
-        data_sources=pd.DataFrame([{"source": "public-test-provider", "status": "ok"}]),
-        provider="public-test-provider",
-    )
-    monkeypatch.setattr(
-        "factor_lab.live_data.download_live_data",
-        lambda _config: acquired,
-    )
-    market = load_market_data(
-        RunConfig(
-            live=True,
-            top_n=1,
-            selection_min_effective_names=1.0,
-            export_input_snapshot=True,
-        )
-    )
-
-    assert market.raw_close_proxy_symbol_count == 1
-    assert market.raw_closes["BBB"].isna().all()
-    assert market.dollar_volumes["BBB"].equals(prices["BBB"].mul(volumes["BBB"]))
-    paths = data.write_market_data_snapshot(market, tmp_path / "input")
-    manifest = json.loads((tmp_path / "input" / "market_data_manifest.json").read_text())
-    assert manifest["readContract"]["pandasFloatPrecision"] == "round_trip"
-    assert manifest["files"]["rawCloses"] == "raw_closes.csv.gz"
-    assert paths["rawCloses"].endswith("raw_closes.csv.gz")
-    for key, expected in (
-        ("prices", market.input_sha256["prices"]),
-        ("volumes", market.input_sha256["volumes"]),
-        ("rawCloses", market.input_sha256["rawCloses"]),
-        ("dollarVolumes", market.input_sha256["dollarVolumes"]),
-    ):
-        restored = pd.read_csv(
-            tmp_path / "input" / manifest["files"][key],
-            index_col=0,
-            parse_dates=True,
-            float_precision="round_trip",
-        )
-        assert data._canonical_matrix_sha256(restored) == expected
 
 
-def test_dead_offline_sample_path_is_absent() -> None:
-    assert "offline_sample" not in inspect.getsource(RunConfig)
-    assert "generate_offline_sample_data" not in inspect.getsource(
-        __import__("factor_lab.live_data", fromlist=["*"])
-    )
 
 
 def test_data_module_has_no_api_or_network_fallback() -> None:

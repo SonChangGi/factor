@@ -1,15 +1,9 @@
 from __future__ import annotations
 
 import csv
-import inspect
 import json
-import os
 import re
-import time
-from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from urllib.request import Request, urlopen
 
 import pandas as pd
 
@@ -18,15 +12,8 @@ DEFAULT_UNIVERSE_PATH = RESOURCE_DIR / "default_universe.csv"
 SEC_COMPANY_TICKERS_EXCHANGE_URL = "https://www.sec.gov/files/company_tickers_exchange.json"
 NASDAQ_LISTED_URL = "https://www.nasdaqtrader.com/dynamic/SymDir/nasdaqlisted.txt"
 NASDAQ_OTHER_LISTED_URL = "https://www.nasdaqtrader.com/dynamic/SymDir/otherlisted.txt"
-USER_AGENT = "factor/0.1 free-public-data research"
-SEC_USER_AGENT_ENV = "MOMENTUM_FACTOR_LAB_SEC_USER_AGENT"
-PUBLIC_UNIVERSE_CACHE_TTL_DAYS = 1
 
 
-def effective_user_agent(user_agent: str | None = None) -> str:
-    return (
-        (user_agent or "").strip() or os.environ.get(SEC_USER_AGENT_ENV, "").strip() or USER_AGENT
-    )
 
 
 CORE_STOCK_SAMPLE_SYMBOLS = [
@@ -129,10 +116,6 @@ KNOWN_ETF_SYMBOLS = frozenset(
 CORE_SAMPLE_SYMBOLS = CORE_STOCK_SAMPLE_SYMBOLS
 
 
-@dataclass(frozen=True, slots=True)
-class UniverseSourceResult:
-    frame: pd.DataFrame
-    data_sources: pd.DataFrame
 
 
 def normalize_symbol(symbol: object) -> str:
@@ -414,208 +397,3 @@ def parse_nasdaq_symbol_directory(
     if include_etfs:
         return _normalize_frame(frame, drop_duplicates=False, exclude_by_name=False)
     return stock_only_universe_frame(frame)
-
-
-def _fetch_text_with_cache(
-    url: str,
-    cache_dir: Path | None,
-    cache_name: str,
-    retry_count: int,
-    retry_backoff_seconds: float,
-    user_agent: str | None = None,
-    cache_ttl_days: int = PUBLIC_UNIVERSE_CACHE_TTL_DAYS,
-) -> tuple[str | None, dict[str, object]]:
-    cache_path = cache_dir / cache_name if cache_dir is not None else None
-    had_stale_cache = False
-    if cache_path is not None and cache_path.exists():
-        mtime = datetime.fromtimestamp(cache_path.stat().st_mtime, tz=UTC)
-        cache_age = datetime.now(UTC) - mtime
-        if cache_age <= timedelta(days=cache_ttl_days):
-            return cache_path.read_text(encoding="utf-8"), {
-                "source": url,
-                "status": "cache_hit",
-                "cache_path": str(cache_path),
-                "retries": 0,
-                "cache_age_days": round(cache_age.total_seconds() / 86_400, 4),
-                "cache_ttl_days": cache_ttl_days,
-                "cache_fresh": True,
-                "cache_stale": False,
-            }
-        had_stale_cache = True
-    last_error = None
-    for attempt in range(retry_count + 1):
-        try:
-            with urlopen(
-                Request(url, headers={"User-Agent": effective_user_agent(user_agent)}), timeout=30
-            ) as response:
-                text = response.read().decode("utf-8", errors="replace")
-            if cache_path is not None:
-                cache_path.parent.mkdir(parents=True, exist_ok=True)
-                cache_path.write_text(text, encoding="utf-8")
-            return text, {
-                "source": url,
-                "status": "fetched",
-                "cache_path": str(cache_path) if cache_path is not None else "disabled",
-                "retries": attempt,
-                "cache_ttl_days": cache_ttl_days,
-                "cache_fresh": True,
-                "cache_stale": had_stale_cache,
-            }
-        except Exception as exc:  # pragma: no cover - network dependent
-            last_error = exc
-            if attempt < retry_count:
-                time.sleep(retry_backoff_seconds)
-    if cache_path is not None and cache_path.exists():
-        mtime = datetime.fromtimestamp(cache_path.stat().st_mtime, tz=UTC)
-        cache_age_days = (datetime.now(UTC) - mtime).total_seconds() / 86_400
-        return cache_path.read_text(encoding="utf-8"), {
-            "source": url,
-            "status": "stale_cache_fallback",
-            "cache_path": str(cache_path),
-            "retries": retry_count,
-            "error": str(last_error),
-            "cache_age_days": round(cache_age_days, 4),
-            "cache_ttl_days": cache_ttl_days,
-            "cache_fresh": False,
-            "cache_stale": True,
-        }
-    return None, {
-        "source": url,
-        "status": "failed",
-        "cache_path": str(cache_path) if cache_path is not None else "disabled",
-        "retries": retry_count,
-        "error": str(last_error),
-    }
-
-
-def build_public_universe_frame(
-    *,
-    cache_dir: Path | None = None,
-    retry_count: int = 1,
-    retry_backoff_seconds: float = 0.5,
-    user_agent: str | None = None,
-) -> UniverseSourceResult:
-    frames: list[pd.DataFrame] = []
-    source_rows: list[dict[str, object]] = []
-    request_user_agent = effective_user_agent(user_agent)
-    fetches = [
-        (
-            SEC_COMPANY_TICKERS_EXCHANGE_URL,
-            "sec_company_tickers_exchange.json",
-            parse_sec_company_tickers_exchange,
-        ),
-        (
-            NASDAQ_LISTED_URL,
-            "nasdaqlisted.txt",
-            lambda text: parse_nasdaq_symbol_directory(
-                text,
-                source_name="nasdaq-trader-listed",
-                include_etfs=True,
-            ),
-        ),
-        (
-            NASDAQ_OTHER_LISTED_URL,
-            "otherlisted.txt",
-            lambda text: parse_nasdaq_symbol_directory(
-                text,
-                source_name="nasdaq-trader-otherlisted",
-                include_etfs=True,
-            ),
-        ),
-    ]
-    for url, cache_name, parser in fetches:
-        fetch_kwargs = (
-            {"user_agent": request_user_agent}
-            if "user_agent" in inspect.signature(_fetch_text_with_cache).parameters
-            else {}
-        )
-        text, source = _fetch_text_with_cache(
-            url,
-            cache_dir,
-            cache_name,
-            retry_count,
-            retry_backoff_seconds,
-            **fetch_kwargs,
-        )
-        source = {
-            **source,
-            "sec_user_agent_configured": request_user_agent != USER_AGENT,
-            "sec_user_agent_env": SEC_USER_AGENT_ENV,
-        }
-        if text is None:
-            source_rows.append({**source, "records": 0})
-            continue
-        frame = parser(text)
-        frames.append(frame)
-        source_rows.append({**source, "records": len(frame)})
-    if not frames:
-        packaged = load_packaged_universe_frame()
-        return UniverseSourceResult(
-            packaged,
-            pd.DataFrame(
-                [
-                    {
-                        "source": "packaged-default-universe",
-                        "status": "fallback_after_public_source_failure",
-                        "records": len(packaged),
-                        "candidate_symbols": len(packaged),
-                        "point_in_time_universe": False,
-                        "tradable_universe_approved": False,
-                        "universe_provenance": "packaged stock-only fallback after public source failure",
-                    },
-                    *source_rows,
-                ]
-            ),
-        )
-    combined = _merge_universe_sources(pd.concat(frames, ignore_index=True))
-    combined = combined.sort_values(["is_etf", "symbol"], ascending=[True, True])
-    combined = stock_only_universe_frame(combined)
-    statuses = {str(row.get("status")) for row in source_rows}
-    failed = "failed" in statuses
-    stale = "stale_cache_fallback" in statuses
-    if failed or stale:
-        summary_status = (
-            "partial_or_stale_source_current_universe"
-            if stale
-            else "partial_source_current_universe"
-        )
-    else:
-        summary_status = "loaded_current_universe"
-    summary = {
-        "source": "public-universe-refresh",
-        "status": summary_status,
-        "records": len(combined),
-        "candidate_symbols": len(combined),
-        "point_in_time_universe": False,
-        "tradable_universe_approved": False,
-        "universe_provenance": "current public Nasdaq/SEC symbol directories; not historical PIT membership",
-        "note": (
-            "Public refresh files are current-universe discovery inputs. SEC/Nasdaq failures are recorded "
-            "as partial-source status and never imply survivorship-free point-in-time provenance."
-        ),
-    }
-    return UniverseSourceResult(combined, pd.DataFrame([summary, *source_rows]))
-
-
-def _merge_universe_sources(frame: pd.DataFrame) -> pd.DataFrame:
-    """Merge source rows while preserving ETF evidence from any provider."""
-
-    cleaned = _normalize_frame(frame, drop_duplicates=False, exclude_by_name=False)
-    if cleaned.empty:
-        return cleaned
-    rows: list[dict[str, object]] = []
-    for symbol, group in cleaned.groupby("symbol", sort=False):
-        stock_like = group[~group["is_etf"] & group["asset_type"].ne("etf")]
-        primary = (stock_like if not stock_like.empty else group).iloc[0]
-        is_etf = bool(group["is_etf"].any() or group["asset_type"].eq("etf").any())
-        rows.append(
-            {
-                "symbol": symbol,
-                "name": primary["name"],
-                "asset_type": "etf" if is_etf else "stock",
-                "exchange": primary["exchange"],
-                "source": "+".join(sorted(set(group["source"].astype(str)))),
-                "is_etf": is_etf,
-            }
-        )
-    return pd.DataFrame(rows, columns=_base_columns())

@@ -1,5 +1,5 @@
 from dataclasses import replace
-from datetime import datetime, timezone
+from datetime import datetime
 from hashlib import sha256
 import json
 from pathlib import Path
@@ -7,7 +7,6 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from factor_lab import integrated_automation as automation
 from factor_lab import integrated_exchange_refresh as refresh
 from factor_lab.integrated_data import FIELDS, IntegratedMarket
 
@@ -124,36 +123,3 @@ def test_missed_month_end_requires_and_accepts_only_exact_recovery(baseline_data
     )
     result = refresh.apply_exchange_observation(prices, accepted, today, recovery)
     assert result.metadata["exchangeUniverse"]["signalObservations"]["2026-11-30"] == recovery["latest"]
-
-
-def test_missing_directories_fail_before_price_collection(baseline_data, tmp_path, monkeypatch):
-    from factor_lab import integrated_data
-
-    monkeypatch.setattr(automation, "current_source", lambda: "source")
-    monkeypatch.setattr(integrated_data, "collect_integrated_market",
-                        lambda *a, **kw: pytest.fail("Unexpected price collection"))
-    baseline = tmp_path / "site"
-    (baseline / "data").mkdir(parents=True)
-    (baseline / "data/integrated-result.json").write_text(json.dumps({
-        "schemaVersion": "integrated-factor/v1", "data": baseline_data,
-    }))
-    original = automation.tree_hash(baseline)
-    workspace = tmp_path / "workspace"
-    with pytest.raises(automation.RefreshInputError, match="evidence is required"):
-        automation.run(workspace, baseline, tmp_path / "candidate", "source",
-                       now=datetime(2026, 11, 30, 23, tzinfo=timezone.utc))
-    status = json.loads((workspace / "status.json").read_text())
-    assert status["reasonCode"] == "refresh_failed"
-    assert status["reason"].startswith("Exchange directory refresh:")
-    assert automation.tree_hash(baseline) == original
-    assert not (tmp_path / "candidate").exists()
-
-
-def test_workflow_freezes_exchange_directories_before_provider_or_calculation():
-    workflow = (ROOT / ".github/workflows/daily-dashboard.yml").read_text()
-    assert workflow.index("--mode daily") < workflow.index("Download and verify the completed-session")
-    assert workflow.index("Preserve validated exchange evidence") < workflow.index(
-        "Wait for bounded provider readiness"
-    )
-    assert "factor-exchange-directory-v1-${{ steps.exchange.outputs.recovery }}" in workflow
-    assert '--exchange-directory "outputs/factor-listings/${TARGET_SESSION}"' in workflow

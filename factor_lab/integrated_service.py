@@ -15,18 +15,28 @@ import time
 import uuid
 
 
-def runtime_identity():
+def runtime_identity(*, dependency_lock=None, lock_owner="factor-engine"):
     import importlib.metadata
     import platform
     root = Path(__file__).resolve().parents[1]
     packages = {}
-    for name in ('numpy', 'pandas', 'exchange-calendars', 'rfc8785', 'yfinance', 'finance-datareader'):
+    for name in ('numpy', 'pandas', 'exchange-calendars', 'rfc8785'):
         try:
             packages[name] = importlib.metadata.version(name)
         except importlib.metadata.PackageNotFoundError:
             packages[name] = None
-    return dict(pythonVersion=platform.python_version(), packageVersions=packages,
-                dependencyLockHash=hashlib.sha256((root / 'uv.lock').read_bytes()).hexdigest())
+    if lock_owner not in {"factor-engine", "quant2alpha-platform"}:
+        raise ValueError("Unknown calculation runtime lock owner")
+    engine_lock = (root / 'uv.lock').read_bytes()
+    lock = Path(dependency_lock).read_bytes() if dependency_lock is not None else engine_lock
+    runtime = dict(pythonVersion=platform.python_version(), packageVersions=packages,
+                   dependencyLockHash=hashlib.sha256(lock).hexdigest(),
+                   dependencyLockOwner=lock_owner,
+                   engineDependencyLockHash=hashlib.sha256(engine_lock).hexdigest())
+    from .integrated_validation import validate_runtime_lock
+    validate_runtime_lock({'runtime': runtime}, lock)
+    return runtime
+
 
 
 def code_fingerprint():
@@ -213,13 +223,14 @@ def effective_settings(settings, comparison_factors=None, common_universe=None):
     return effective
 
 
-def execute_run(market, settings, directory, comparison_factors=None, common_universe=None, experiment_definition=None):
+def execute_run(market, settings, directory, comparison_factors=None, common_universe=None, experiment_definition=None, *, runtime_lock=None, runtime_lock_owner="factor-engine"):
     from .integrated_engine import run_integrated_analysis
     if (Path(directory) / 'result.json').exists():
         raise FileExistsError('A completed run is immutable; choose a new output directory')
     effective = effective_settings(settings, comparison_factors, common_universe)
     config = normalize_settings(effective)
     code_hash, code_files = code_fingerprint()
+    runtime = runtime_identity(dependency_lock=runtime_lock, lock_owner=runtime_lock_owner)
     if experiment_definition is not None:
         from .integrated_variants import run_legacy_experiment
         result = run_legacy_experiment(market, config, experiment_definition)
@@ -236,7 +247,9 @@ def execute_run(market, settings, directory, comparison_factors=None, common_uni
         raise RuntimeError('Calculation code changed during execution; result was not published')
     result['resultIdentity']['codeHash'] = code_hash
     result['resultIdentity']['codeHashFiles'] = code_files
-    result['resultIdentity']['runtime'] = runtime_identity()
+    if runtime_identity(dependency_lock=runtime_lock, lock_owner=runtime_lock_owner) != runtime:
+        raise RuntimeError('Calculation runtime changed during execution; result was not published')
+    result['resultIdentity']['runtime'] = runtime
     result['resultIdentity']['resultId'] = hashlib.sha256(json.dumps(result['resultIdentity'], sort_keys=True).encode()).hexdigest()[:24]
     for stress in result.get('research', {}).get('stress', []):
         stress.update(inputHash=result['resultIdentity']['inputHash'], codeHash=code_hash,

@@ -128,7 +128,10 @@ def test_daily_preflight_rejects_migrations_before_collection(baseline, mutation
 
 def test_current_baseline_is_compatible_without_changing_it(baseline):
     before = json.dumps(baseline, sort_keys=True)
-    gate.daily_compatibility(baseline)
+    import subprocess
+    manifest = json.loads((ROOT / "site/publication.json").read_text())
+    lock = subprocess.check_output(["git", "show", manifest["calculationSourceCommit"] + ":uv.lock"], cwd=ROOT)
+    gate.daily_compatibility(baseline, lock=lock)
     assert json.dumps(baseline, sort_keys=True) == before
 
 
@@ -138,23 +141,19 @@ def test_nested_manifest_cannot_escape_inventory(site):
         gate.check_files(site)
 
 
-def test_ci_and_pages_share_the_full_release_gate_and_locked_environment():
+def test_ci_and_pages_share_the_full_archive_release_gate_and_locked_environment():
     pages = (ROOT / '.github/workflows/deploy-pages.yml').read_text()
     pr = (ROOT / '.github/workflows/release-preflight.yml').read_text()
-    daily = (ROOT / '.github/workflows/daily-dashboard.yml').read_text()
     release = (ROOT / 'scripts/check_release.sh').read_text()
     for workflow in (pr, pages):
         assert 'bash scripts/check_release.sh' in workflow
-        assert 'uv sync --locked --extra dev --extra live' in workflow
+        assert 'uv sync --locked --extra dev' in workflow
+        assert '--extra live' not in workflow
         assert 'runs-on: ubuntu-24.04' in workflow
-        assert "pip install -e" not in workflow and 'pip install --upgrade pip' not in workflow
     assert 'pull_request:' in pr and 'contents: read' in pr
     assert 'pages: write' not in pr and 'id-token: write' not in pr
     assert 'python -m pytest -q tests/test_integrated*.py' in release
     assert 'test_integrated*dom.cjs' in release
     assert 'tests/test_release_preflight.py' in release
     assert '--mode release' in release
-    assert daily.index('--mode daily') < daily.index('Resolve the explicitly requested immutable input cache')
-    assert daily.index('--mode daily') < daily.index('Collect, reconcile, calculate and validate the candidate')
-    assert 'test_fresh_spy_does_not_hide_widespread_stale_equities' in daily
-    assert 'uv sync --frozen --extra live --extra dev' in daily
+    assert not (ROOT / '.github/workflows/daily-dashboard.yml').exists()

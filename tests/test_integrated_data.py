@@ -44,98 +44,10 @@ def test_snapshot_round_trip_and_tamper_failure(tmp_path):
         load_integrated_market(tmp_path)
 
 
-def test_partial_batch_retries_symbol_and_retains_field_pairing(tmp_path, monkeypatch):
-    import yfinance as yf
-    from factor_lab.integrated_data import collect_integrated_market
-
-    calls = []
-
-    def download(symbols, **kwargs):
-        calls.append(list(symbols))
-        ix = pd.bdate_range("2025-01-01", periods=4)
-        values = {}
-        for symbol in symbols:
-            for field, value in [
-                ("Adj Close", 9.0),
-                ("Close", 10.0),
-                ("Open", 9.5),
-                ("High", 11.0),
-                ("Low", 9.0),
-                ("Volume", 2e6),
-                ("Dividends", 0.0),
-                ("Stock Splits", 0.0),
-            ]:
-                values[field, symbol] = np.nan if symbol == "A" and len(symbols) > 1 else value
-        return pd.DataFrame(values, index=ix)
-
-    monkeypatch.setattr(yf, "download", download)
-    m = collect_integrated_market(tmp_path, start="2025-01-01", end="2025-02-01", symbols=["A"])
-    assert ["A"] in calls
-    assert m.metadata["failedSymbols"] == {}
-    assert (m.dollar_volumes.A == 20e6).all()
-    assert (m.prices.A == 9).all()
-    assert len(m.metadata["receipts"]) == 2
 
 
-@pytest.mark.parametrize('now,expected', [
-    ('2026-10-21T19:59:59+00:00','2026-10-20'),
-    ('2026-10-21T20:00:00+00:00','2026-10-21'),
-    ('2026-10-21T22:17:00+00:00','2026-10-21'),
-    ('2026-10-22T01:47:00+00:00','2026-10-21'),
-    ('2026-11-27T17:59:59+00:00','2026-11-25'),
-    ('2026-11-27T18:00:00+00:00','2026-11-27'),
-])
-def test_collection_uses_same_completed_session_as_automation(tmp_path,monkeypatch,now,expected):
-    from datetime import datetime
-    import yfinance as yf
-    from factor_lab import integrated_data as data
-    from factor_lab.dashboard_freshness import expected_recent_us_close_date
-    frozen = datetime.fromisoformat(now)
-    class Clock(datetime):
-        @classmethod
-        def now(cls,tz=None):
-            return frozen.astimezone(tz) if tz else frozen.replace(tzinfo=None)
-    monkeypatch.setattr(data,'datetime',Clock)
-    def download(symbols,**kwargs):
-        # Include today's and future quotes so neither can bypass the close gate.
-        dates=pd.bdate_range(pd.Timestamp(frozen.date())-pd.Timedelta(days=7),periods=9)
-        fields={'Adj Close':9.,'Close':10.,'Open':9.5,'High':11.,'Low':9.,
-                'Volume':2e6,'Dividends':0.,'Stock Splits':0.}
-        return pd.DataFrame({(field,symbol):value for symbol in symbols
-                             for field,value in fields.items()},index=dates)
-    monkeypatch.setattr(yf,'download',download)
-    end=(pd.Timestamp(frozen.date())+pd.Timedelta(days=2)).date().isoformat()
-    result=data.collect_integrated_market(tmp_path,start='2026-01-01',end=end,symbols=['A'])
-    assert result.metadata['dataAsOf']==expected
-    assert result.metadata['dataAsOf']==expected_recent_us_close_date(frozen).isoformat()
-    assert result.prices.index[-1]==pd.Timestamp(expected)
 
 
-def test_collector_does_not_admit_unverified_zero_volume_valuations(tmp_path, monkeypatch):
-    import yfinance as yf
-    from factor_lab.integrated_data import collect_integrated_market
-
-    def download(symbols, **kwargs):
-        ix = pd.bdate_range("2025-01-01", periods=4)
-        values = {}
-        for symbol in symbols:
-            for field, value in [("Adj Close", 9.), ("Close", 10.), ("Open", 9.5),
-                                 ("High", 11.), ("Low", 9.), ("Volume", 2e6),
-                                 ("Dividends", 0.), ("Stock Splits", 0.)]:
-                column = np.full(len(ix), value)
-                if symbol == "A" and field == "Volume":
-                    column[1] = 0.
-                values[field, symbol] = column
-        return pd.DataFrame(values, index=ix)
-
-    monkeypatch.setattr(yf, "download", download)
-    result = collect_integrated_market(tmp_path, start="2025-01-01", end="2025-02-01", symbols=["A"])
-    assert pd.isna(result.prices.A.iloc[1])
-    assert pd.isna(result.valuation_prices.A.iloc[1])
-    assert result.metadata["unadmittedNonTradingMarkCount"] == 1
-    cached = pd.read_csv(next((tmp_path / "downloads").glob("*.csv.gz")), header=[0, 1], index_col=0)
-    assert cached["Adj Close", "A"].iloc[1] == 9.
-    assert cached["Volume", "A"].iloc[1] == 0.
 
 
 def test_original_accounting_matches_explicit_targets_on_same_snapshot():
@@ -263,41 +175,6 @@ def test_future_split_and_rescaled_provider_history_preserve_past_price_floor():
         reconstruct_as_traded(later)
 
 
-def test_historical_collection_uses_future_actions_before_clipping(tmp_path, monkeypatch):
-    import yfinance as yf
-    from factor_lab.integrated_data import collect_integrated_market
-
-    seen = []
-
-    def download(symbols, **kwargs):
-        seen.append(kwargs["end"])
-        ix = pd.to_datetime(["2025-01-30", "2025-01-31", "2025-02-03"])
-        values = {}
-        for symbol in symbols:
-            for field, value in [
-                ("Adj Close", 2.0),
-                ("Close", 2.0),
-                ("Open", 2.0),
-                ("High", 2.0),
-                ("Low", 2.0),
-                ("Volume", 4e6),
-                ("Dividends", 0.0),
-                ("Stock Splits", 0.0),
-            ]:
-                values[field, symbol] = [value] * 3
-            if symbol == "A":
-                values["Stock Splits", symbol] = [0.0, 0.0, 4.0]
-        return pd.DataFrame(values, index=ix)
-
-    monkeypatch.setattr(yf, "download", download)
-    m = collect_integrated_market(tmp_path, start="2025-01-01", end="2025-02-01", symbols=["A"])
-    assert all(pd.Timestamp(end) > pd.Timestamp("2025-02-03") for end in seen)
-    assert m.prices.index.max() == pd.Timestamp("2025-01-31")
-    assert (m.raw_close.A == 8).all()
-    assert (m.volumes.A == 1e6).all()
-    assert m.metadata["splitActionsAfterOutputEnd"] == [
-        {"date": "2025-02-03", "symbol": "A", "ratio": 4.0}
-    ]
 
 
 def test_quality_quarantines_shape_inputs_preserving_close_and_sources(tmp_path):
@@ -337,46 +214,8 @@ def test_quality_quarantines_shape_inputs_preserving_close_and_sources(tmp_path)
     pd.testing.assert_frame_equal(restored.shape_valid, m.shape_valid, check_freq=False)
 
 
-def test_nonempty_truncated_batch_is_retried_as_full_paired_history(tmp_path, monkeypatch):
-    import yfinance as yf
-    from factor_lab.integrated_data import collect_integrated_market
-    calls = []
-    def download(symbols, **kwargs):
-        calls.append(list(symbols))
-        dates = pd.bdate_range('2025-01-01', periods=4)
-        fields = {'Adj Close':9.,'Close':10.,'Open':9.5,'High':11.,'Low':9.,
-                  'Volume':2e6,'Dividends':0.,'Stock Splits':0.}
-        columns = {(field,symbol):[value]*4 for symbol in symbols for field,value in fields.items()}
-        frame = pd.DataFrame(columns,index=dates)
-        if len(symbols)>1:
-            frame.loc[dates[:-1],pd.IndexSlice[:, 'A']] = np.nan
-        return frame
-    monkeypatch.setattr(yf,'download',download)
-    reference={'A':dict(observations=4,firstObservation='2025-01-01',asOf='2025-01-06')}
-    market=collect_integrated_market(tmp_path,start='2025-01-01',end='2025-02-01',symbols=['A'],reference_coverage=reference)
-    assert ['A'] in calls and market.prices.A.notna().sum()==4
-    assert (market.raw_close.A*market.volumes.A==20e6).all()
-    assert market.metadata['inputCoverage']['A']['observations']==4
-    assert market.metadata['receipts'][-1]['retryReason']['reason']=='truncated_positive_volume_history'
 
 
-def test_persistent_truncated_history_blocks_snapshot_before_calculation(tmp_path,monkeypatch):
-    import yfinance as yf
-    from factor_lab.integrated_data import collect_integrated_market
-    monkeypatch.setattr('factor_lab.integrated_data.time.sleep',lambda *a:None)
-    def download(symbols,**kwargs):
-        dates=pd.bdate_range('2025-01-01',periods=4)
-        fields={'Adj Close':9.,'Close':10.,'Open':9.5,'High':11.,'Low':9.,'Volume':2e6,'Dividends':0.,'Stock Splits':0.}
-        frame=pd.DataFrame({(field,symbol):[value]*4 for symbol in symbols for field,value in fields.items()},index=dates)
-        frame.loc[dates[:-1],pd.IndexSlice[:,'A']]=np.nan
-        return frame
-    monkeypatch.setattr(yf,'download',download)
-    with pytest.raises(ValueError,match='Truncated historical input remains'):
-        collect_integrated_market(tmp_path,start='2025-01-01',end='2025-02-01',symbols=['A'],
-            reference_coverage={'A':dict(observations=4,firstObservation='2025-01-01',asOf='2025-01-06')})
-    assert not (tmp_path/'manifest.json').exists()
-    assert (tmp_path/'history-coverage-failure.json').exists()
-    assert len(list((tmp_path/'downloads').glob('single-*-coverage*.csv.gz')))==2
 
 
 def test_new_session_does_not_mask_loss_of_old_observation():
@@ -385,19 +224,3 @@ def test_new_session_does_not_mask_loss_of_old_observation():
     frame=pd.DataFrame({('Adj Close','A'):[10.]*3,('Volume','A'):[100.]*3},index=dates)
     expected={'A':dict(observations=3,firstObservation='2025-01-01',asOf='2025-01-03')}
     assert history_coverage_issue(frame,'A',expected)['observed']['observations']==2
-
-
-def test_immutable_snapshot_rechecks_reference_prefix_not_total_count(tmp_path):
-    from factor_lab.integrated_data import save_integrated_market,collect_integrated_market
-    dates=pd.to_datetime(['2025-01-02','2025-01-03','2025-01-06'])
-    prices=pd.DataFrame({'A':[10.]*3},index=dates)
-    volumes=prices*0+100
-    from factor_lab.integrated_listing import listing_context
-    market=IntegratedMarket(prices,prices,prices,prices,prices,volumes,prices*0,prices*0,
-        prices.notna(),dict(request=dict(start='2025-01-01',endExclusive='2025-02-01',symbols=['A'],
-            listing=listing_context(['A'],'2025-01-31')),
-        inputCoverage={'A':dict(observations=3,firstObservation='2025-01-02',asOf='2025-01-06')}))
-    save_integrated_market(market,tmp_path)
-    with pytest.raises(ValueError,match='Immutable snapshot has truncated'):
-        collect_integrated_market(tmp_path,start='2025-01-01',end='2025-02-01',symbols=['A'],
-            reference_coverage={'A':dict(observations=3,firstObservation='2025-01-01',asOf='2025-01-03')})

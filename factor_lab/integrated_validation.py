@@ -21,8 +21,14 @@ def validate_runtime_lock(identity, lock):
     require(runtime.get('dependencyLockHash') == hashlib.sha256(lock).hexdigest(), 'Runtime dependency lock differs')
     require(re.fullmatch(r'\d+\.\d+\.\d+', runtime.get('pythonVersion', '')) is not None, 'Missing Python version')
     packages = runtime.get('packageVersions', {})
-    require(set(packages) == {'numpy', 'pandas', 'exchange-calendars', 'rfc8785', 'yfinance', 'finance-datareader'}, 'Runtime package catalog')
     locked = dict(re.findall(r'\[\[package\]\]\s+name = "([^"]+)"\s+version = "([^"]+)"', lock.decode()))
+    expected = {'numpy', 'pandas', 'exchange-calendars', 'rfc8785'}
+    # The immutable legacy release lock still declares both old acquisition packages.
+    legacy = {'yfinance', 'finance-datareader'}
+    if legacy & locked.keys():
+        require(legacy <= locked.keys(), 'Incomplete legacy runtime lock')
+        expected |= legacy
+    require(set(packages) == expected, 'Runtime package catalog')
     require(all(version is not None and version == locked.get(name) for name, version in packages.items()), 'Runtime packages differ from committed lock')
 
 

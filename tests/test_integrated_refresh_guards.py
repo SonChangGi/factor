@@ -1,4 +1,3 @@
-from datetime import datetime, timezone
 import json
 from types import SimpleNamespace
 
@@ -7,7 +6,6 @@ import pandas as pd
 import pytest
 
 from factor_lab import integrated_automation as automation
-from factor_lab.integrated_data import collect_integrated_market
 
 
 def _provider(symbols, *, missing=()):
@@ -28,101 +26,12 @@ def _provider(symbols, *, missing=()):
     return frame
 
 
-def test_only_new_day_missing_gets_fresh_bounded_retry_and_full_history_is_preserved(
-    tmp_path, monkeypatch
-):
-    import yfinance as yf
-
-    calls = []
-
-    def download(symbols, **kwargs):
-        calls.append(symbols)
-        return _provider(symbols, missing=["HUBB"] if len(symbols) > 1 else [])
-
-    monkeypatch.setattr(yf, "download", download)
-    monkeypatch.setattr("factor_lab.integrated_data.time.sleep", lambda _: None)
-    result = collect_integrated_market(
-        tmp_path,
-        start="2010-01-01",
-        end="2026-10-29",
-        symbols=["HUBB"],
-        target_session="2026-10-28",
-        required_target_symbols=["HUBB"],
-    )
-    assert calls[1:] == [["HUBB"]]
-    assert result.prices.HUBB.to_list() == [10.0, 10.0]
-    receipt = result.metadata["receipts"][-1]
-    assert receipt["retryReason"] == "missing_target_session"
-    assert len(list((tmp_path / "downloads").glob("*.csv.gz"))) == 2
 
 
-def test_cross_day_cache_replay_preserves_original_provider_horizon(tmp_path, monkeypatch):
-    import yfinance as yf
-    import factor_lab.integrated_data as data
-    class LaterDay(datetime):
-        @classmethod
-        def now(cls, tz=None):
-            return datetime(2026, 11, 1, tzinfo=timezone.utc)
-    monkeypatch.setattr(data, 'datetime', LaterDay)
-    original = dict(start='2010-01-01', endExclusive='2026-10-29',
-                    providerEndExclusive='2026-10-30')
-    (tmp_path / 'reuse-source-request.json').write_text(json.dumps(original))
-    calls = []
-    def download(symbols, **kwargs):
-        calls.append(kwargs['end'])
-        return _provider(symbols)
-    monkeypatch.setattr(yf, 'download', download)
-    collect_integrated_market(tmp_path, start='2010-01-01', end='2026-10-29',
-                              symbols=['HUBB'], target_session='2026-10-28')
-    assert calls and set(calls) == {'2026-10-30'}
-    assert json.loads((tmp_path / 'request.json').read_text())['providerEndExclusive'] == '2026-10-30'
 
 
-@pytest.mark.parametrize('end', ['2026-10-28', '2026-11-03'])
-def test_replay_cannot_shorten_required_actions_or_claim_a_future_horizon(tmp_path, monkeypatch, end):
-    import yfinance as yf
-    import factor_lab.integrated_data as data
-    class LaterDay(datetime):
-        @classmethod
-        def now(cls, tz=None):
-            return datetime(2026, 11, 1, tzinfo=timezone.utc)
-    monkeypatch.setattr(data, 'datetime', LaterDay)
-    monkeypatch.setattr(yf, 'download', lambda *a, **kw: pytest.fail('must reject before download'))
-    (tmp_path / 'reuse-source-request.json').write_text(json.dumps(dict(
-        start='2010-01-01', endExclusive='2026-10-29', providerEndExclusive=end)))
-    with pytest.raises(ValueError, match='provider horizon'):
-        collect_integrated_market(tmp_path, start='2010-01-01', end='2026-10-29', symbols=['HUBB'])
 
 
-def test_persistent_new_day_gap_is_not_filled_or_retried_forever(tmp_path, monkeypatch):
-    import yfinance as yf
-
-    calls = []
-
-    def download(symbols, **kwargs):
-        calls.append(symbols)
-        return _provider(symbols, missing=["HUBB"])
-
-    monkeypatch.setattr(yf, "download", download)
-    monkeypatch.setattr("factor_lab.integrated_data.time.sleep", lambda _: None)
-    result = collect_integrated_market(
-        tmp_path,
-        start="2010-01-01",
-        end="2026-10-29",
-        symbols=["HUBB"],
-        target_session="2026-10-28",
-        required_target_symbols=["HUBB"],
-    )
-    assert calls[1:] == [["HUBB"], ["HUBB"]]
-    assert result.prices.HUBB.iloc[0] == 10.0 and pd.isna(result.prices.HUBB.iloc[-1])
-    assert "HUBB" in result.metadata["targetSessionMissingSymbols"]
-    baseline = {
-        "data": {"asOf": "2026-10-27"},
-        "factors": [{"holdings": [{"symbol": "HUBB", "weight": 0.066}]}],
-    }
-    with pytest.raises(automation.RefreshInputError, match="Required holding") as error:
-        automation.validate_required_valuations(result, baseline, "2026-10-28")
-    assert error.value.code == "held_quote_missing" and error.value.symbols == ["HUBB"]
 
 
 def test_required_valuation_follows_cash_claim_stock_exchange_and_approved_valuation_mark():
@@ -174,144 +83,14 @@ def _probe_site(tmp_path, monkeypatch):
     return site, policy
 
 
-def test_probe_wait_is_bounded_and_only_missing_symbols_are_requeried(tmp_path, monkeypatch):
-    site, policy = _probe_site(tmp_path, monkeypatch)
-    calls, waits = [], []
-
-    def download(symbols, **kwargs):
-        calls.append(symbols)
-        assert kwargs["threads"] is False
-        return _provider(symbols, missing=["HUBB"] if len(calls) < 3 else [])
-
-    report = automation.provider_ready(
-        site,
-        tmp_path / "probe",
-        now=datetime(2026, 10, 29, 6, tzinfo=timezone.utc),
-        sleep=waits.append,
-        download=download,
-    )
-    assert waits == [30, 30] and calls[1:] == [["HUBB"], ["HUBB"]]
-    assert report["status"] == "ready" and report["attempts"] == 3
 
 
-@pytest.mark.parametrize("invalid_single", [None, "stale", "zero_volume"])
-def test_probe_final_retry_isolates_small_batch_gaps_and_keeps_validation(
-    tmp_path, monkeypatch, invalid_single
-):
-    site, _ = _probe_site(tmp_path, monkeypatch)
-    baseline = site / "data/integrated-result.json"
-    payload = json.loads(baseline.read_text())
-    payload["selection"]["holdings"].append({"symbol": "ADEA", "weight": 0.5})
-    baseline.write_text(json.dumps(payload))
-    original = baseline.read_bytes()
-    calls, waits = [], []
-
-    def download(symbols, **kwargs):
-        calls.append(symbols)
-        response = _provider(symbols, missing=[s for s in symbols if s in {"ADEA", "HUBB"}]
-                             if len(symbols) > 1 else [])
-        if len(symbols) == 1 and symbols[0] == "HUBB":
-            if invalid_single == "stale":
-                response = response.iloc[:-1]
-            elif invalid_single == "zero_volume":
-                response.loc[response.index[-1], ("Volume", "HUBB")] = 0
-        return response
-
-    kwargs = dict(now=datetime(2026, 10, 29, 6, tzinfo=timezone.utc),
-                  download=download, sleep=waits.append)
-    if invalid_single:
-        with pytest.raises(automation.RefreshInputError) as error:
-            automation.provider_ready(site, tmp_path / "probe", **kwargs)
-        assert error.value.symbols == ["HUBB"]
-    else:
-        report = automation.provider_ready(site, tmp_path / "probe", **kwargs)
-        assert report["status"] == "ready"
-        assert [r["symbols"] for r in report["receipts"][-2:]] == [["ADEA"], ["HUBB"]]
-    assert calls[1:] == [["ADEA", "HUBB"], ["ADEA"], ["HUBB"]]
-    assert waits == [30, 30]
-    assert baseline.read_bytes() == original
 
 
-def test_probe_widespread_outage_keeps_batched_request_bound(tmp_path, monkeypatch):
-    site, _ = _probe_site(tmp_path, monkeypatch)
-    baseline = site / "data/integrated-result.json"
-    payload = json.loads(baseline.read_text())
-    payload["selection"]["holdings"] = [{"symbol": f"GAP{i:02}", "weight": 0.01}
-                                         for i in range(26)]
-    baseline.write_text(json.dumps(payload))
-    calls = []
-
-    def download(symbols, **kwargs):
-        calls.append(symbols)
-        return _provider(symbols, missing=symbols)
-
-    with pytest.raises(automation.RefreshInputError):
-        automation.provider_ready(site, tmp_path / "probe",
-            now=datetime(2026, 10, 29, 6, tzinfo=timezone.utc),
-            download=download, sleep=lambda _: None)
-    assert len(calls) == 6 and all(len(c) > 1 for c in calls)
 
 
-def test_verified_exact_session_policy_quote_admits_probe_but_does_not_invent_inputs(
-    tmp_path, monkeypatch
-):
-    site, policy = _probe_site(tmp_path, monkeypatch)
-    policy.write_text(
-        json.dumps(
-            {
-                "quotes": [{"symbol": "HUBB", "date": "2026-10-28", "adjustedClose": 437.33}],
-                "valuationMarks": [],
-                "exchanges": [],
-            }
-        )
-    )
-    calls = []
-
-    def download(symbols, **kwargs):
-        calls.append(symbols)
-        return _provider(symbols)
-
-    result = automation.provider_ready(
-        site,
-        tmp_path / "probe",
-        now=datetime(2026, 10, 29, 6, tzinfo=timezone.utc),
-        download=download,
-    )
-    assert all("HUBB" not in s for s in calls) and result["status"] == "ready"
-    # Evidence from an earlier date cannot waive the current observation.
-    policy.write_text(policy.read_text().replace("2026-10-28", "2026-10-27"))
-    with pytest.raises(automation.RefreshInputError):
-        automation.provider_ready(
-            site,
-            tmp_path / "second",
-            now=datetime(2026, 10, 29, 6, tzinfo=timezone.utc),
-            download=lambda symbols, **_: _provider(symbols, missing=["HUBB"]),
-            sleep=lambda _: None,
-        )
 
 
-def test_unheld_latest_day_gaps_do_not_expand_target_retries_to_the_whole_universe(
-    tmp_path, monkeypatch
-):
-    import yfinance as yf
-
-    calls = []
-
-    def download(symbols, **kwargs):
-        calls.append(symbols)
-        return _provider(symbols, missing=[s for s in symbols if s == "UNHELD"])
-
-    monkeypatch.setattr(yf, "download", download)
-    result = collect_integrated_market(
-        tmp_path,
-        start="2010-01-01",
-        end="2026-10-29",
-        symbols=["HUBB", "UNHELD"],
-        target_session="2026-10-28",
-        required_target_symbols=["HUBB"],
-    )
-    assert len(calls) == 1 and pd.isna(result.prices.UNHELD.iloc[-1])
-    assert result.metadata["requiredTargetSymbols"] == ["HUBB"]
 
 
 def test_only_current_verified_full_bar_clears_failed_inventory_and_keeps_source_failure():
@@ -365,69 +144,3 @@ def test_only_current_verified_full_bar_clears_failed_inventory_and_keeps_source
     assert row["reason"] == ""
     fixed.metadata["amendments"][0]["date"] = "2026-10-27"
     assert data_inventory(fixed)[0]["status"] == "failed"
-
-
-def test_real_workflow_probe_path_does_not_precreate_immutable_calculation_workspace(
-    tmp_path, monkeypatch
-):
-    """Run the actual declared layout through probe and runner initialization."""
-    from pathlib import Path
-    import re
-    import factor_lab.integrated_data as data
-
-    workflow = (
-        Path(__file__).resolve().parents[1] / ".github/workflows/daily-dashboard.yml"
-    ).read_text()
-    readiness_step = workflow.split(
-        "      - name: Wait for bounded provider readiness before full collection\n", 1
-    )[1].split("      - name:", 1)[0]
-    calculate_step = workflow.split(
-        "      - name: Collect, reconcile, calculate and validate the candidate\n", 1
-    )[1].split("      - name:", 1)[0]
-
-    def declared_path(step, argument):
-        literal = re.search(r"--" + argument + r' "([^"]+)"', step).group(1)
-        return tmp_path / literal.replace("${GITHUB_RUN_ID}", "40837055549").replace(
-            "${GITHUB_RUN_ATTEMPT}", "1"
-        )
-
-    probe = declared_path(readiness_step, "output")
-    workspace = declared_path(calculate_step, "workspace")
-    assert probe != workspace and workspace not in probe.parents
-    site, _ = _probe_site(tmp_path, monkeypatch)
-    original = json.loads((site / "data/integrated-result.json").read_text())
-    original["data"]["symbols"] = []
-    (site / "data/integrated-result.json").write_text(json.dumps(original))
-    automation.provider_ready(
-        site,
-        probe,
-        now=datetime(2026, 10, 29, 6, tzinfo=timezone.utc),
-        download=lambda symbols, **_: _provider(symbols),
-        sleep=lambda _: None,
-    )
-    assert (probe / "status.json").exists() and not workspace.exists()
-    monkeypatch.setattr(automation, "current_source", lambda: "source")
-
-    def collector(*args, **kwargs):
-        raise RuntimeError("reached collector after isolated readiness")
-
-    monkeypatch.setattr(data, "collect_integrated_market", collector)
-    with pytest.raises(RuntimeError, match="reached collector after isolated readiness"):
-        automation.run(
-            workspace,
-            site,
-            tmp_path / "candidate",
-            "source",
-            now=datetime(2026, 10, 29, 6, tzinfo=timezone.utc),
-        )
-    assert json.loads((workspace / "status.json").read_text())["state"] == "failed"
-    # Both artifact and fallback-summary producers follow the separate probe.
-    assert (
-        "outputs/factor-readiness/${{ github.run_id }}-${{ github.run_attempt }}/status.json"
-        in workflow
-    )
-    assert "outputs/factor-readiness/*/status.json" in workflow
-    assert (
-        "outputs/factor-daily/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}/provider-readiness"
-        not in workflow
-    )

@@ -1,6 +1,5 @@
 from datetime import datetime, timezone
 import hashlib
-import importlib.util
 import json
 from pathlib import Path
 import subprocess
@@ -185,47 +184,6 @@ def _git(directory, *args):
     return subprocess.check_output(["git", *args], cwd=directory, text=True).strip()
 
 
-def test_operational_cas_publisher_commits_only_status_on_latest_remote_financial_result(tmp_path):
-    spec = importlib.util.spec_from_file_location(
-        "publish_refresh", ROOT / "scripts/publish_refresh_status.py"
-    )
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    remote, writer, runner = (tmp_path / p for p in ("remote.git", "writer", "runner"))
-    _git(tmp_path, "init", "--bare", "--initial-branch=main", str(remote))
-    _git(tmp_path, "clone", str(remote), str(writer))
-    _git(writer, "config", "user.name", "Fixture")
-    _git(writer, "config", "user.email", "fixture@example.invalid")
-    site_fixture(writer / "site")
-    _git(writer, "add", ".")
-    _git(writer, "commit", "-m", "initial")
-    _git(writer, "push", "origin", "main")
-    _git(tmp_path, "clone", str(remote), str(runner))
-    # Production advances after the calculation checkout, before state publication.
-    site_fixture(writer / "site", day="2026-10-28", identifier="f" * 24)
-    _git(writer, "add", ".")
-    _git(writer, "commit", "-m", "new financial")
-    _git(writer, "push", "origin", "main")
-    before = _git(remote, "rev-parse", "main")
-    result = module.publish(
-        runner,
-        "main",
-        run_id="40802522743",
-        run_attempt=1,
-        source_commit="e" * 40,
-        outcome="failure",
-        target="2026-10-28",
-        started_at="2026-10-29T01:47:25Z",
-        now=NOW,
-    )
-    assert result["should_deploy"] == "true"
-    assert _git(remote, "diff", "--name-only", before, "main") == "site/data/refresh-status.json"
-    value = json.loads(_git(remote, "show", "main:site/data/refresh-status.json"))
-    assert value["lastGood"]["resultId"] == "f" * 24 and value["status"] == "ok"
-    assert (
-        json.loads(_git(remote, "show", "main:site/data/integrated-result.json"))["data"]["asOf"]
-        == "2026-10-28"
-    )
 
 
 def test_only_named_operational_file_is_outside_financial_inventory(tmp_path):
@@ -237,51 +195,3 @@ def test_only_named_operational_file_is_outside_financial_inventory(tmp_path):
     (tmp_path / "data/unreviewed-status.json").write_text("{}")
     with pytest.raises(ValueError, match="unreviewed files"):
         check_files(tmp_path)
-
-
-def test_status_push_race_retries_against_new_financial_tip_without_overwriting_it(
-    tmp_path, monkeypatch
-):
-    spec = importlib.util.spec_from_file_location(
-        "publish_refresh_race", ROOT / "scripts/publish_refresh_status.py"
-    )
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    remote, writer, runner = (tmp_path / p for p in ("remote.git", "writer", "runner"))
-    _git(tmp_path, "init", "--bare", "--initial-branch=main", str(remote))
-    _git(tmp_path, "clone", str(remote), str(writer))
-    _git(writer, "config", "user.name", "Fixture")
-    _git(writer, "config", "user.email", "fixture@example.invalid")
-    site_fixture(writer / "site")
-    _git(writer, "add", ".")
-    _git(writer, "commit", "-m", "initial")
-    _git(writer, "push", "origin", "main")
-    _git(tmp_path, "clone", str(remote), str(runner))
-    original_run = subprocess.run
-    fired = []
-
-    def race(args, *rest, **kwargs):
-        if args[:3] == ["git", "push", "origin"] and not fired:
-            fired.append(True)
-            site_fixture(writer / "site", day="2026-10-28", identifier="f" * 24)
-            _git(writer, "add", ".")
-            _git(writer, "commit", "-m", "concurrent financial publication")
-            _git(writer, "push", "origin", "main")
-        return original_run(args, *rest, **kwargs)
-
-    monkeypatch.setattr(subprocess, "run", race)
-    result = module.publish(
-        runner,
-        "main",
-        run_id="40802522743",
-        run_attempt=1,
-        source_commit="e" * 40,
-        outcome="failure",
-        target="2026-10-28",
-        started_at="2026-10-29T01:47:25Z",
-        now=NOW,
-    )
-    assert fired and result["should_deploy"] == "true"
-    value = json.loads(_git(remote, "show", "main:site/data/refresh-status.json"))
-    assert value["lastGood"]["resultId"] == "f" * 24 and value["status"] == "ok"
-    assert _git(remote, "diff", "--name-only", "main~1", "main") == "site/data/refresh-status.json"

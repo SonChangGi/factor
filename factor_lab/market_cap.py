@@ -1,68 +1,20 @@
 from __future__ import annotations
 
-import hashlib
-import json
 import re
-import time
-import zipfile
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
-from io import BytesIO
-from pathlib import Path
-from typing import Iterable
-from urllib.error import HTTPError
-from urllib.request import Request, urlopen
 
 import numpy as np
 import pandas as pd
 
 from .config import RunConfig
-from .universe import effective_user_agent, normalize_symbol
+from .universe import normalize_symbol
 
 
 SEC_MARKET_CAP_VERSION = "sec-pit-market-cap-v1"
-SEC_TICKERS_URL = "https://www.sec.gov/files/company_tickers_exchange.json"
-SEC_FRAME_URL = "https://data.sec.gov/api/xbrl/frames/{taxonomy}/{tag}/{uom}/{ccp}.json"
-SEC_MASTER_URL = "https://www.sec.gov/Archives/edgar/full-index/{year}/QTR{quarter}/master.zip"
-SEC_REQUEST_INTERVAL_SECONDS = 0.12
 DIRECT_CAP_MINIMUM = 1_000_000.0
 DIRECT_CAP_MAXIMUM = 20_000_000_000_000.0
 
 
-@dataclass(frozen=True, slots=True)
-class FrameSpec:
-    taxonomy: str
-    tag: str
-    uom: str
-    context: str
-    value_kind: str
-    priority: int
-
-
-FRAME_SPECS = (
-    FrameSpec("dei", "EntityCommonStockSharesOutstanding", "shares", "instant", "shares", 60),
-    FrameSpec("us-gaap", "CommonStockSharesOutstanding", "shares", "instant", "shares", 55),
-    FrameSpec("ifrs-full", "NumberOfSharesOutstanding", "shares", "instant", "shares", 50),
-    FrameSpec(
-        "us-gaap",
-        "WeightedAverageNumberOfDilutedSharesOutstanding",
-        "shares",
-        "duration",
-        "shares",
-        45,
-    ),
-    FrameSpec(
-        "us-gaap",
-        "WeightedAverageNumberOfSharesOutstandingBasic",
-        "shares",
-        "duration",
-        "shares",
-        40,
-    ),
-    FrameSpec("ifrs-full", "AdjustedWeightedAverageShares", "shares", "duration", "shares", 35),
-    FrameSpec("ifrs-full", "WeightedAverageShares", "shares", "duration", "shares", 30),
-    FrameSpec("dei", "EntityPublicFloat", "USD", "instant", "direct_cap", 20),
-)
 
 
 @dataclass(slots=True)
@@ -78,152 +30,22 @@ class MarketCapResult:
 _last_sec_request_at = 0.0
 
 
-def _sec_cache_path(cache_dir: Path, category: str, name: str) -> Path:
-    return cache_dir / "sec_market_cap" / category / name
 
 
-def _cache_fresh(path: Path, config: RunConfig) -> bool:
-    if config.refresh_market_data or not path.exists():
-        return False
-    age = datetime.now(UTC) - datetime.fromtimestamp(path.stat().st_mtime, tz=UTC)
-    return timedelta(0) <= age <= timedelta(hours=config.market_cache_max_age_hours)
 
 
-def _fetch_bytes(
-    url: str,
-    path: Path,
-    config: RunConfig,
-    *,
-    allow_not_found: bool = False,
-) -> tuple[bytes | None, str]:
-    if _cache_fresh(path, config):
-        return path.read_bytes(), "cache_hit"
-    global _last_sec_request_at
-    last_error: Exception | None = None
-    for attempt in range(config.retry_count + 1):
-        elapsed = time.monotonic() - _last_sec_request_at
-        if elapsed < SEC_REQUEST_INTERVAL_SECONDS:
-            time.sleep(SEC_REQUEST_INTERVAL_SECONDS - elapsed)
-        try:
-            request = Request(
-                url, headers={"User-Agent": effective_user_agent(config.sec_user_agent)}
-            )
-            with urlopen(request, timeout=45) as response:
-                payload = response.read()
-            _last_sec_request_at = time.monotonic()
-            path.parent.mkdir(parents=True, exist_ok=True)
-            temporary = path.with_name(f".{path.name}.tmp")
-            temporary.write_bytes(payload)
-            temporary.replace(path)
-            return payload, "fetched"
-        except HTTPError as error:
-            _last_sec_request_at = time.monotonic()
-            if allow_not_found and error.code == 404:
-                return None, "not_found"
-            last_error = error
-        except Exception as error:  # pragma: no cover - depends on public endpoints
-            _last_sec_request_at = time.monotonic()
-            last_error = error
-        if attempt < config.retry_count:
-            time.sleep(config.retry_backoff_seconds * (attempt + 1))
-    if path.exists():
-        return path.read_bytes(), "stale_cache_fallback"
-    raise RuntimeError(f"SEC market-cap source failed: {url}: {last_error}")
 
 
-def _quarters(start_year: int, as_of: pd.Timestamp) -> Iterable[tuple[int, int]]:
-    last_quarter = (as_of.month - 1) // 3 + 1
-    for year in range(start_year, as_of.year + 1):
-        maximum = last_quarter if year == as_of.year else 4
-        for quarter in range(1, maximum + 1):
-            yield year, quarter
 
 
-def _accession_from_filename(value: str) -> str | None:
-    match = re.search(r"(\d{10}-\d{2}-\d{6})", value)
-    return match.group(1) if match else None
 
 
-def _parse_master_index(payload: bytes) -> list[dict[str, object]]:
-    with zipfile.ZipFile(BytesIO(payload)) as archive:
-        lines = archive.read("master.idx").decode("latin1").splitlines()
-    rows: list[dict[str, object]] = []
-    for line in lines:
-        if line.count("|") != 4:
-            continue
-        cik, name, form, filed, filename = line.split("|", maxsplit=4)
-        accession = _accession_from_filename(filename)
-        if accession is None:
-            continue
-        try:
-            filed_at = pd.Timestamp(filed).normalize()
-        except (TypeError, ValueError):
-            continue
-        rows.append(
-            {
-                "accession": accession,
-                "cik": int(cik),
-                "entityName": name,
-                "form": form,
-                "filed": filed_at,
-            }
-        )
-    return rows
 
 
-def _ticker_cik_map(payload: bytes) -> pd.DataFrame:
-    parsed = json.loads(payload)
-    frame = pd.DataFrame(parsed.get("data", []), columns=parsed.get("fields", []))
-    if not {"cik", "ticker", "name"}.issubset(frame.columns):
-        raise ValueError("SEC company ticker response is missing required fields")
-    frame["symbol"] = frame["ticker"].astype(str).map(normalize_symbol)
-    frame["cik"] = pd.to_numeric(frame["cik"], errors="coerce").astype("Int64")
-    frame = frame.dropna(subset=["cik"]).drop_duplicates("symbol", keep="first")
-    return frame[["symbol", "cik", "name"]].reset_index(drop=True)
 
 
-def _frame_contexts(spec: FrameSpec, start_year: int, as_of: pd.Timestamp) -> Iterable[str]:
-    for year, quarter in _quarters(start_year, as_of):
-        suffix = "I" if spec.context == "instant" else ""
-        yield f"CY{year}Q{quarter}{suffix}"
-    if spec.context == "duration":
-        for year in range(start_year, as_of.year + 1):
-            yield f"CY{year}"
 
 
-def _frame_rows(payload: bytes, spec: FrameSpec) -> list[dict[str, object]]:
-    parsed = json.loads(payload)
-    if (
-        parsed.get("taxonomy") != spec.taxonomy
-        or parsed.get("tag") != spec.tag
-        or parsed.get("uom") != spec.uom
-    ):
-        raise ValueError(f"SEC frame identity mismatch for {spec.taxonomy}/{spec.tag}")
-    rows: list[dict[str, object]] = []
-    for raw in parsed.get("data", []):
-        try:
-            value = float(raw["val"])
-            end = pd.Timestamp(raw["end"]).normalize()
-            cik = int(raw["cik"])
-        except (KeyError, TypeError, ValueError, OverflowError):
-            continue
-        if not np.isfinite(value) or value <= 0.0:
-            continue
-        rows.append(
-            {
-                "accession": str(raw.get("accn") or ""),
-                "cik": cik,
-                "entityName": str(raw.get("entityName") or ""),
-                "location": str(raw.get("loc") or ""),
-                "factEnd": end,
-                "value": value,
-                "valueKind": spec.value_kind,
-                "taxonomy": spec.taxonomy,
-                "tag": spec.tag,
-                "priority": spec.priority,
-            }
-        )
-    return rows
 
 
 def _normalized_entity_name(value: object) -> str:
@@ -448,82 +270,3 @@ def build_market_cap_panel(
         covered_symbol_count=latest_covered,
         coverage_ratio=coverage_ratio,
     )
-
-
-def load_sec_market_caps(
-    *,
-    dates: pd.DatetimeIndex,
-    raw_closes: pd.DataFrame,
-    stock_splits: pd.DataFrame,
-    universe: pd.DataFrame,
-    config: RunConfig,
-) -> MarketCapResult:
-    as_of = pd.Timestamp(dates.max()).normalize()
-    context_start_year = pd.Timestamp(config.start_date).year - 1
-    cache_root = config.cache_dir
-    statuses: list[str] = []
-
-    ticker_payload, status = _fetch_bytes(
-        SEC_TICKERS_URL,
-        _sec_cache_path(cache_root, "reference", "company_tickers_exchange.json"),
-        config,
-    )
-    assert ticker_payload is not None
-    statuses.append(status)
-    ticker_map = _ticker_cik_map(ticker_payload)
-
-    master_rows: list[dict[str, object]] = []
-    for year, quarter in _quarters(context_start_year, as_of):
-        payload, status = _fetch_bytes(
-            SEC_MASTER_URL.format(year=year, quarter=quarter),
-            _sec_cache_path(cache_root, "master", f"{year}q{quarter}.zip"),
-            config,
-            allow_not_found=True,
-        )
-        statuses.append(status)
-        if payload is not None:
-            master_rows.extend(_parse_master_index(payload))
-    master = pd.DataFrame(master_rows).drop_duplicates("accession", keep="last")
-    if master.empty:
-        raise ValueError("SEC master indexes contain no filing-date evidence")
-    filed_by_accession = master.set_index("accession")[["filed", "form"]]
-
-    fact_rows: list[dict[str, object]] = []
-    for spec in FRAME_SPECS:
-        for context in _frame_contexts(spec, context_start_year, as_of):
-            filename = f"{spec.taxonomy}_{spec.tag}_{spec.uom}_{context}.json"
-            payload, status = _fetch_bytes(
-                SEC_FRAME_URL.format(
-                    taxonomy=spec.taxonomy,
-                    tag=spec.tag,
-                    uom=spec.uom,
-                    ccp=context,
-                ),
-                _sec_cache_path(cache_root, "frames", filename),
-                config,
-                allow_not_found=True,
-            )
-            statuses.append(status)
-            if payload is not None:
-                fact_rows.extend(_frame_rows(payload, spec))
-    facts = pd.DataFrame(fact_rows)
-    if facts.empty:
-        raise ValueError("SEC XBRL frames contain no market-cap facts")
-    facts = facts.join(filed_by_accession, on="accession", how="inner")
-    result = build_market_cap_panel(
-        dates=dates,
-        raw_closes=raw_closes,
-        stock_splits=stock_splits,
-        universe=universe,
-        facts=facts,
-        ticker_map=ticker_map,
-        config=config,
-    )
-    result.source_health["fetchStatusCounts"] = json.dumps(
-        pd.Series(statuses).value_counts().sort_index().to_dict(),
-        sort_keys=True,
-    )
-    result.source_health["fetchStatusSha256"] = hashlib.sha256(
-        "\n".join(sorted(statuses)).encode("utf-8")
-    ).hexdigest()
-    return result

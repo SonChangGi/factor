@@ -1,11 +1,9 @@
-"""One-core, fail-closed weekday refresh of the integrated Factor publication.
+"""Offline validation and recovery helpers for preserved Factor releases.
 
-A run creates immutable inputs/results and a separate candidate. Only the
-explicit promote command may replace a baseline, after a compare-and-swap check.
+The retired mixed-universe collector and scheduled CLI have been removed.
 """
 from __future__ import annotations
-import argparse
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 import hashlib
 import json
 import os
@@ -152,68 +150,6 @@ def validate_required_valuations(market, baseline_payload, target):
     return dict(targetDataAsOf=target, requiredHeldSymbols=len(required), valuedHeldSymbols=len(required))
 
 
-def provider_ready(baseline, output, *, now=None, attempts=3, delay_seconds=30, sleep=None, download=None, benchmarks_only=False):
-    """Small, bounded admission probe; its quotes never enter financial inputs."""
-    import time
-    import pandas as pd
-    import yfinance as yf
-    from .integrated_listing import listing_context, provider_symbols, normalize_provider_columns
-    from .integrated_service import atomic_json
-    if not 1 <= attempts <= 3 or not 0 <= delay_seconds <= 30:
-        raise ValueError('Provider admission is limited to three probes and 60 seconds waiting')
-    output = Path(output)
-    output.mkdir(parents=True, exist_ok=True)
-    baseline_payload = json.loads((Path(baseline) / 'data/integrated-result.json').read_text())
-    target = freshness(baseline, 'manual', now)['target_data_as_of']
-    policy = json.loads(POLICY.read_text())
-    required = set() if benchmarks_only else required_valuation_symbols(baseline_payload, target, policy.get('exchanges', []))
-    evidence = {r['symbol'] for kind in ('quotes', 'valuationMarks') for r in policy.get(kind, [])
-                if r['date'] == target and r.get('adjustedClose', 0) > 0}
-    remaining = set(('SPY', 'QQQ', '^IXIC')) | (required - evidence)
-    context = listing_context(sorted(remaining), target)
-    download = download or yf.download
-    sleep = sleep or time.sleep
-    receipts = []
-    for attempt in range(1, attempts + 1):
-        # A provider batch can omit a few securities even when their individual
-        # responses are complete. Match the collector's single-symbol recovery
-        # on the final retry, without fanning out a market-wide provider outage.
-        pending = sorted(remaining)
-        batch_size = 1 if attempt > 1 and attempt == attempts and len(pending) <= 25 else 25
-        for offset in range(0, len(pending), batch_size):
-            symbols = pending[offset:offset + batch_size]
-            if not symbols:
-                continue
-            source_symbols = list(provider_symbols(symbols, context).values())
-            try:
-                raw = download(source_symbols, start=(pd.Timestamp(target) - pd.Timedelta(days=7)).date().isoformat(),
-                    end=(pd.Timestamp(target) + pd.Timedelta(days=1)).date().isoformat(),
-                    auto_adjust=False, actions=False, repair=False, keepna=True, progress=False,
-                    threads=False, timeout=15, group_by='column')
-                path = output / f'probe-{attempt}-{offset}.csv.gz'
-                raw.to_csv(path, compression={'method': 'gzip', 'mtime': 0})
-                data = normalize_provider_columns(raw, symbols, context)
-                found = [symbol for symbol in symbols if ('Adj Close', symbol) in data and
-                         pd.Timestamp(target) in data.index and pd.notna(data.at[pd.Timestamp(target), ('Adj Close', symbol)]) and
-                         data.at[pd.Timestamp(target), ('Adj Close', symbol)] > 0 and
-                         ('Volume', symbol) in data and pd.notna(data.at[pd.Timestamp(target), ('Volume', symbol)]) and
-                         data.at[pd.Timestamp(target), ('Volume', symbol)] > 0]
-                receipts.append(dict(attempt=attempt, symbols=symbols, observed=found,
-                    path=path.name, sha256=hashlib.sha256(path.read_bytes()).hexdigest(),
-                    retrievedAtUtc=datetime.now(timezone.utc).isoformat()))
-            except Exception as exc:
-                receipts.append(dict(attempt=attempt, symbols=symbols, errorType=type(exc).__name__))
-        found = {s for receipt in receipts if receipt['attempt'] == attempt for s in receipt.get('observed', [])}
-        remaining -= found
-        status = dict(schemaVersion='factor-provider-readiness/v1', status='ready' if not remaining else 'waiting',
-            targetDataAsOf=target, missingSymbols=sorted(remaining), attempts=attempt,
-            policyHash=hashlib.sha256(POLICY.read_bytes()).hexdigest(), listing=context, receipts=receipts)
-        atomic_json(output / 'status.json', status)
-        if not remaining:
-            return status
-        if attempt < attempts:
-            sleep(delay_seconds)
-    raise RefreshInputError('provider_not_ready', 'Provider target-session quotes unavailable: ' + ', '.join(sorted(remaining)), remaining)
 
 
 def validate_market_refresh(market, baseline_payload, target):
@@ -310,35 +246,6 @@ def coverage_contract_from_result(payload):
             for row in payload['data']['symbols']}
 
 
-def seed_download_cache(reuse_root, destination, target):
-    """Copy only verified provider responses; never splice old price matrices."""
-    source, destination = Path(reuse_root) / 'raw', Path(destination)
-    manifest_path = source / 'manifest.json'
-    manifest = json.loads(manifest_path.read_text())
-    identity = manifest.pop('snapshotId')
-    if hashlib.sha256(json.dumps(manifest, sort_keys=True).encode()).hexdigest() != identity:
-        raise ValueError('Reused input manifest is corrupt')
-    manifest['snapshotId'] = identity
-    expected_end = (datetime.fromisoformat(target).date()+timedelta(days=1)).isoformat()
-    request = json.loads((source / 'request.json').read_text())
-    if request['endExclusive'] != expected_end or manifest['dataAsOf'] != target:
-        raise ValueError('Reused input cache belongs to a different completed session')
-    destination.mkdir(parents=True, exist_ok=False)
-    # Preserve the old request separately. Batch alias keys prevent reusing its
-    # obsolete provider-symbol response; unchanged symbols keep their caches.
-    shutil.copyfile(source / 'request.json', destination / 'reuse-source-request.json')
-    from .integrated_listing import listing_context
-    from .integrated_data import BENCHMARKS
-    request['listing'] = listing_context(sorted(set(request['symbols']) | set(BENCHMARKS)), target)
-    (destination / 'request.json').write_text(json.dumps(request, indent=2) + '\n')
-    downloads = source / 'downloads'
-    for path in downloads.rglob('*'):
-        if path.is_symlink():
-            raise ValueError('Reused input cache contains symbolic links')
-    shutil.copytree(downloads, destination / 'downloads')
-    return dict(sourcePath=str(source), sourceSnapshotId=identity,
-                sourceManifestSha256=hashlib.sha256(manifest_path.read_bytes()).hexdigest(),
-                sourceCacheKey=os.environ.get('FACTOR_REUSED_INPUT_CACHE_KEY'))
 
 
 def export_input_diagnostics(reuse_root, output, *, symbols=None, start='2015-01-01', end='2016-12-15'):
@@ -391,115 +298,6 @@ def export_input_diagnostics(reuse_root, output, *, symbols=None, start='2015-01
     return receipt
 
 
-def run(workspace, baseline, candidate, source_commit, *, now=None, reuse_input_root=None,
-        archived_input_root=None, exchange_directory=None, exchange_recovery_directory=None):
-    from .integrated_data import collect_integrated_market, save_integrated_market
-    from .integrated_exchange_refresh import exchange_observation, exchange_plan, apply_exchange_observation
-    from .integrated_service import atomic_json, execute_run, build_site, code_fingerprint
-    from .integrated_validation import validate_automated_result, write_automated_manifest
-    workspace, baseline, candidate = map(Path, (workspace, baseline, candidate))
-    if workspace.exists() or candidate.exists():
-        raise FileExistsError('Choose a new immutable run workspace and candidate')
-    if current_source() != source_commit:
-        raise ValueError('Calculation checkout differs from requested source')
-    workspace.mkdir(parents=True)
-    before, fingerprint = tree_hash(baseline), code_fingerprint()[0]
-    decision = freshness(baseline, 'manual', now)
-    target = decision['target_data_as_of']
-    status = dict(schemaVersion='factor-automation/v1', state='running',
-                  attemptedAtUtc=datetime.now(timezone.utc).isoformat(), targetDataAsOf=target,
-                  sourceCommit=source_commit, baselineHash=before,
-                  inputCacheKey=os.environ.get('FACTOR_INPUT_CACHE_KEY'))
-    atomic_json(workspace / 'status.json', status)
-    staging = candidate.with_name(candidate.name + '.tmp-' + uuid.uuid4().hex)
-    try:
-        end = (datetime.fromisoformat(target).date() + timedelta(days=1)).isoformat()
-        if reuse_input_root:
-            status['reusedInputCache'] = seed_download_cache(reuse_input_root, workspace / 'raw', target)
-            atomic_json(workspace / 'status.json', status)
-        baseline_payload = json.loads((baseline / 'data/integrated-result.json').read_text())
-        exchange_baseline = baseline_payload['data']
-        _, recovery_session = exchange_plan(exchange_baseline, target)
-        try:
-            recovered_exchange = None
-            if recovery_session:
-                recovered_exchange = exchange_observation(
-                    exchange_baseline, recovery_session, exchange_recovery_directory,
-                )
-                exchange_baseline = {
-                    **exchange_baseline, 'asOf': recovery_session,
-                    'exchangeUniverse': recovered_exchange,
-                }
-            exchange = exchange_observation(exchange_baseline, target, exchange_directory)
-        except (OSError, ValueError) as exc:
-            raise RefreshInputError('refresh_failed', f'Exchange directory refresh: {exc}') from exc
-        if exchange:
-            atomic_json(workspace / 'exchange-observation.json', {
-                **exchange, 'recovered': recovered_exchange,
-            })
-        reference = coverage_contract_from_result(baseline_payload)
-        policy = json.loads(POLICY.read_text())
-        required_targets = required_valuation_symbols(baseline_payload, target, policy.get('exchanges', [])) | {'SPY', 'QQQ', '^IXIC'}
-        raw = collect_integrated_market(workspace / 'raw', '2010-01-01', end, reference_coverage=reference, archived_input_root=archived_input_root, target_session=target, required_target_symbols=required_targets)
-        if raw.metadata['dataAsOf'] != target:
-            raise ValueError('Provider has not supplied the completed target session')
-        from .integrated_vintage import load_accepted_vintage, extend_price_vintage
-        if archived_input_root is None:
-            raise ValueError('Daily calculation requires the baseline input vintage')
-        previous = load_accepted_vintage(archived_input_root, baseline_payload)
-        vintage = extend_price_vintage(raw, previous)
-        # Nested in raw so the existing cache path/version continues to restore
-        # both legacy raw caches and new caches containing a calculation vintage.
-        vintage = save_integrated_market(vintage, workspace / 'raw' / 'price-vintage')
-        atomic_json(workspace / 'price-vintage.json', vintage.metadata['priceVintage'])
-        market = reconcile_policy(vintage, policy)
-        if status['inputCacheKey']:
-            market.metadata['inputCache'] = dict(key=status['inputCacheKey'],
-                storage='GitHub Actions cache', retention='bounded_10GB_eviction_7_days_unused',
-                rawSnapshotId=raw.metadata['snapshotId'],
-                priceVintageSnapshotId=vintage.metadata['snapshotId'])
-        # Do not retain two extra full-universe snapshots during the backtest.
-        del previous, raw, vintage
-        market_check = validate_market_refresh(market, baseline_payload, target)
-        market_check['holdingValuations'] = validate_required_valuations(market, baseline_payload, target)
-        market = apply_exchange_observation(market, baseline_payload['data'], exchange, recovered_exchange)
-        market = save_integrated_market(market, workspace / 'market', compression_level=1)
-        result = execute_run(market, dict(run_stress=True, bootstrap_repetitions=2000), workspace / 'analysis')
-        validation = validate_automated_result(result, target_as_of=target)
-        validation['automationPolicy'] = market.metadata['automationPolicy']
-        validation['marketRefresh'] = market_check
-        revision = history_revision(json.loads((baseline / 'data/integrated-result.json').read_text()),
-                                    result, policy['maxHistoricalNavRevision'])
-        atomic_json(workspace / 'history-revision.json', revision)
-        if revision['status'] != 'passed':
-            raise ValueError('Historical NAV or choices changed; see history-revision.json')
-        validation['historyRevision'] = revision
-        if (tree_hash(baseline) != before or current_source() != source_commit or
-                code_fingerprint()[0] != fingerprint):
-            raise RuntimeError('Source or last-good publication changed during calculation')
-        build_site(staging, result)
-        # Historical audit reports and additive history sidecars belong to the
-        # old run. Embedded current histories are authoritative; do not copy
-        # old diagnostics into a new run's page.
-        write_automated_manifest(staging, result, source_commit, validation)
-        from .publication_security import scan_publication_paths
-        findings = scan_publication_paths([staging])
-        if findings:
-            raise ValueError('Candidate publication failed secret scan')
-        os.replace(staging, candidate)
-        status.update(state='validated', finishedAtUtc=datetime.now(timezone.utc).isoformat(), resultId=result['resultIdentity']['resultId'],
-                      dataAsOf=result['data']['asOf'], candidateHash=tree_hash(candidate),
-                      candidate=str(candidate.resolve()), validation=validation)
-        atomic_json(workspace / 'status.json', status)
-        return status
-    except Exception as exc:
-        status.update(state='failed', finishedAtUtc=datetime.now(timezone.utc).isoformat(), errorType=type(exc).__name__, reason=str(exc),
-                      reasonCode=getattr(exc, 'code', 'refresh_failed'), missingSymbols=getattr(exc, 'symbols', []),
-                      lastGoodPreserved=tree_hash(baseline) == before)
-        atomic_json(workspace / 'status.json', status)
-        if staging.exists():
-            shutil.rmtree(staging)
-        raise
 
 
 def promote(workspace, baseline, candidate):
@@ -527,71 +325,3 @@ def promote(workspace, baseline, candidate):
     status.update(state='promoted', promotedAtUtc=datetime.now(timezone.utc).isoformat())
     atomic_json(workspace / 'status.json', status)
     return status
-
-
-def main(argv=None):
-    parser = argparse.ArgumentParser(description=__doc__)
-    sub = parser.add_subparsers(dest='command', required=True)
-    fresh = sub.add_parser('freshness')
-    fresh.add_argument('--site', type=Path, required=True)
-    fresh.add_argument('--event-name', default='schedule')
-    listing = sub.add_parser('exchange-directory')
-    listing.add_argument('--baseline', type=Path, required=True)
-    listing.add_argument('--target', required=True)
-    listing.add_argument('--directory', type=Path)
-    receipt = sub.add_parser('confirm-input-cache')
-    receipt.add_argument('--workspace', type=Path, required=True)
-    receipt.add_argument('--cache-key', required=True)
-    receipt.add_argument('--cache-id', required=True)
-    diagnostics = sub.add_parser('export-input-diagnostics')
-    diagnostics.add_argument('--reuse-input-root', type=Path, required=True)
-    diagnostics.add_argument('--output', type=Path, required=True)
-    diagnostics.add_argument('--symbols', default='')
-    diagnostics.add_argument('--start', default='2015-01-01')
-    diagnostics.add_argument('--end', default='2016-12-15')
-    ready = sub.add_parser('provider-ready')
-    ready.add_argument('--baseline', type=Path, required=True)
-    ready.add_argument('--output', type=Path, required=True)
-    ready.add_argument('--benchmarks-only', action='store_true')
-    for name in ('run', 'promote'):
-        command = sub.add_parser(name)
-        command.add_argument('--workspace', type=Path, required=True)
-        command.add_argument('--baseline', type=Path, required=True)
-        command.add_argument('--candidate', type=Path, required=True)
-        if name == 'run':
-            command.add_argument('--source-commit', required=True)
-            command.add_argument('--reuse-input-root', type=Path)
-            command.add_argument('--archived-input-root', type=Path)
-            command.add_argument('--exchange-directory', type=Path)
-            command.add_argument('--exchange-recovery-directory', type=Path)
-    args = parser.parse_args(argv)
-    if args.command == 'freshness':
-        for key, value in freshness(args.site, args.event_name).items():
-            print(f'{key}={str(value).lower() if isinstance(value, bool) else value or "none"}')
-    elif args.command == 'exchange-directory':
-        from .integrated_exchange_refresh import exchange_observation, exchange_plan
-        data = json.loads((args.baseline / 'data/integrated-result.json').read_text())['data']
-        if args.directory is None:
-            required, recovery = exchange_plan(data, args.target)
-            print(f'required={str(required).lower()}\nrecovery={recovery or ""}')
-        else:
-            print(json.dumps(exchange_observation(data, args.target, args.directory)))
-    elif args.command == 'confirm-input-cache':
-        print(json.dumps(confirm_input_cache(args.workspace, args.cache_key, args.cache_id)))
-    elif args.command == 'export-input-diagnostics':
-        print(json.dumps(export_input_diagnostics(args.reuse_input_root, args.output,
-            symbols=args.symbols.split(',') if args.symbols else None, start=args.start, end=args.end)))
-    elif args.command == 'provider-ready':
-        print(json.dumps(provider_ready(args.baseline, args.output, benchmarks_only=args.benchmarks_only)))
-    elif args.command == 'run':
-        print(json.dumps(run(args.workspace, args.baseline, args.candidate, args.source_commit,
-                             reuse_input_root=args.reuse_input_root, archived_input_root=args.archived_input_root,
-                             exchange_directory=args.exchange_directory,
-                             exchange_recovery_directory=args.exchange_recovery_directory)))
-    else:
-        print(json.dumps(promote(args.workspace, args.baseline, args.candidate)))
-    return 0
-
-
-if __name__ == '__main__':
-    raise SystemExit(main())

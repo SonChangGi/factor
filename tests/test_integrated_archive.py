@@ -1,8 +1,6 @@
-import json
-import numpy as np
 import pandas as pd
 import pytest
-from factor_lab.integrated_data import IntegratedMarket, save_integrated_market, collect_integrated_market
+from factor_lab.integrated_data import IntegratedMarket, save_integrated_market
 from factor_lab.integrated_archive import load_archived_columns, preserve_archived_columns
 
 
@@ -45,28 +43,3 @@ def test_corrupt_archive_or_different_identity_fails_closed(tmp_path):
     path=tmp_path/'old/raw/prices.csv.gz';path.write_bytes(path.read_bytes()+b'tamper')
     with pytest.raises(ValueError,match='matrix hash mismatch'):
         load_archived_columns(tmp_path/'old/raw',{'A'})
-
-
-def test_collector_archives_whole_column_after_bounded_retry_without_new_quote(tmp_path,monkeypatch):
-    import yfinance as yf
-    from factor_lab.integrated_data import integrated_universe
-    old=archived_market(tmp_path/'old')
-    # Use the real packaged universe identity in this collector integration.
-    old.metadata['universeVersion']=integrated_universe()['version']
-    save_integrated_market(old,tmp_path/'matching/raw')
-    monkeypatch.setattr('factor_lab.integrated_data.time.sleep',lambda *a:None)
-    def download(symbols,**kwargs):
-        dates=pd.bdate_range('2025-01-01',periods=4)
-        fields={'Adj Close':900.,'Close':1000.,'Open':950.,'High':1100.,'Low':900.,'Volume':2e6,'Dividends':0.,'Stock Splits':0.}
-        frame=pd.DataFrame({(field,symbol):[value]*4 for symbol in symbols for field,value in fields.items()},index=dates)
-        frame.loc[dates[:-1],pd.IndexSlice[:,'A']]=np.nan
-        return frame
-    monkeypatch.setattr(yf,'download',download)
-    reference={'A':dict(observations=3,firstObservation='2025-01-01',asOf='2025-01-03')}
-    new=collect_integrated_market(tmp_path/'new',start='2025-01-01',end='2025-02-01',symbols=['A'],
-        reference_coverage=reference,archived_input_root=tmp_path/'matching')
-    assert new.prices.A.iloc[:3].to_list()==old.prices.A.to_list()
-    assert pd.isna(new.prices.A.iloc[-1]) and not new.eligibility.A.iloc[-1]
-    assert new.metadata['inputCoverage']['A']['observations']==3
-    assert new.metadata['archivedHistory'][0]['state']=='archived_history_only'
-    assert new.metadata['receipts'][-1]['retrievedAt']=='2025-01-04T00:00:00Z'

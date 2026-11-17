@@ -36,21 +36,6 @@ def test_publication_rejects_changed_bytes_and_unreviewed_assets(tmp_path):
         validator.validate(target)
 
 
-def test_deployment_and_recovery_read_the_same_integrated_publication():
-    deploy = (ROOT / '.github/workflows/deploy-pages.yml').read_text()
-    recovery = (ROOT / '.github/workflows/daily-dashboard-watchdog.yml').read_text()
-    daily = (ROOT / '.github/workflows/daily-dashboard.yml').read_text()
-    assert 'path: public' in deploy and 'find public -type f' in deploy
-    assert 'PUBLICATION_ROOT: public' in recovery
-    assert 'find "${PUBLICATION_ROOT:-docs}" -type f' in recovery
-    for text in (deploy, recovery):
-        assert 'required_paths=(index.html publication.json data/integrated-result.json)' in text
-    assert 'request-pages-deployment:' in daily and 'expected_source_sha="${SOURCE_SHA}"' in daily
-    # This publication migration must not modify any existing schedule slots.
-    for name in ('daily-dashboard.yml', 'daily-dashboard-watchdog.yml'):
-        before = subprocess.check_output(['git', 'show', f'd0a07060a7ca330c50a8cc9edf76d9929f981c3b:.github/workflows/{name}'], cwd=ROOT, text=True)
-        after = (ROOT / '.github/workflows' / name).read_text()
-        assert [s.strip() for s in before.splitlines() if 'cron:' in s] == [s.strip() for s in after.splitlines() if 'cron:' in s]
 
 
 def test_legacy_control_artifacts_remain_exact_and_cannot_replace_integrated_result(tmp_path):

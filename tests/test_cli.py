@@ -1,25 +1,13 @@
 import argparse
 import json
 from pathlib import Path
-from types import SimpleNamespace
 
-import pandas as pd
 import pytest
 
 from factor_lab.config import MAX_TOP_N
-from factor_lab.cli import (
-    ScheduledGridPreset,
-    _compact_summary,
-    _config,
-    _execute_run,
-    _execute_scheduled_grid,
-    build_parser,
-    main,
-)
-from factor_lab.research_inputs import ResearchInputs
+from factor_lab.cli import _compact_summary, _config, _execute_run, build_parser, main
 from factor_lab.workflow import (
     AnalysisResult,
-    NoEligibleFactorError,
     result_payload,
     write_result_json,
 )
@@ -33,17 +21,15 @@ def _command_parser(name: str) -> argparse.ArgumentParser:
     return subparsers.choices[name]
 
 
-def test_run_requires_exactly_one_live_local_or_demo_source() -> None:
+def test_run_requires_exactly_one_local_or_demo_source() -> None:
     parser = build_parser()
     with pytest.raises(SystemExit):
         parser.parse_args(["run"])
     with pytest.raises(SystemExit):
-        parser.parse_args(["run", "--live", "--demo"])
+        parser.parse_args(["run", "--demo", "--prices", "prices.csv"])
 
-    live = parser.parse_args(["run", "--live"])
-    assert live.live is True
-    assert _config(live).data_mode == "live_market"
-    assert _config(live).selection_max_abs_security_day_contribution == pytest.approx(0.10)
+    with pytest.raises(SystemExit):
+        parser.parse_args(["run", "--live"])
 
     sparse_demo = parser.parse_args(["run", "--demo", "--demo-missing-ratio", "0.001"])
     assert sparse_demo.demo is True
@@ -98,11 +84,10 @@ def test_run_cli_derives_coverage_for_the_requested_evaluation_window(
     assert config.min_daily_risk_observations == minimum_observations
 
 
-def test_run_cli_exposes_live_coverage_policy_and_output_config() -> None:
+def test_run_cli_exposes_offline_coverage_policy_and_output_config() -> None:
     run = _command_parser("run")
     options = {option for action in run._actions for option in action.option_strings}
     expected = {
-        "--live",
         "--prices",
         "--market-caps",
         "--demo",
@@ -127,19 +112,6 @@ def test_run_cli_exposes_live_coverage_policy_and_output_config() -> None:
         "--selection-extreme-event-action",
         "--selection-extreme-event-penalty-points",
         "--universe",
-        "--universe-source-mode",
-        "--universe-profile",
-        "--max-price-symbols",
-        "--price-chunk-size",
-        "--yahoo-chart-fallback-limit",
-        "--nasdaq-fallback-limit",
-        "--stooq-fallback-limit",
-        "--finance-datareader-fallback-limit",
-        "--retry-count",
-        "--retry-backoff-seconds",
-        "--market-cache-max-age-hours",
-        "--refresh-market-data",
-        "--sec-user-agent",
         "--output-dir",
         "--site-dir",
         "--cache-dir",
@@ -167,32 +139,13 @@ def test_run_cli_exposes_live_coverage_policy_and_output_config() -> None:
     ):
         assert removed not in options
 
-    local_api = _command_parser("serve-local-api")
-    local_api_options = {
-        option for action in local_api._actions for option in action.option_strings
-    }
-    assert "--allowed-origin" in local_api_options
-    parsed = build_parser().parse_args(
-        [
-            "serve-local-api",
-            "--live",
-            "--allowed-origin",
-            "https://research.example",
-            "--allowed-origin",
-            "https://preview.example",
-        ]
-    )
-    assert parsed.allowed_origin == [
-        "https://research.example",
-        "https://preview.example",
-    ]
 
 
 def test_cli_values_map_to_run_config_without_hidden_overrides() -> None:
     args = build_parser().parse_args(
         [
             "run",
-            "--live",
+            "--demo",
             "--universe",
             "AAPL,MSFT,AAPL",
             "--chart-benchmark",
@@ -229,15 +182,6 @@ def test_cli_values_map_to_run_config_without_hidden_overrides() -> None:
             "penalize",
             "--selection-extreme-event-penalty-points",
             "15",
-            "--max-price-symbols",
-            "none",
-            "--yahoo-chart-fallback-limit",
-            "unlimited",
-            "--stooq-fallback-limit",
-            "0",
-            "--market-cache-max-age-hours",
-            "12",
-            "--refresh-market-data",
             "--output-dir",
             "outputs/live",
             "--site-dir",
@@ -248,7 +192,7 @@ def test_cli_values_map_to_run_config_without_hidden_overrides() -> None:
         ]
     )
     config = _config(args)
-    assert config.live is True
+    assert config.live is False
     assert config.universe == ["AAPL", "MSFT"]
     assert config.chart_benchmark == "^GSPC"
     assert config.additional_comparison_benchmarks == ("QQQ", "DIA")
@@ -272,11 +216,6 @@ def test_cli_values_map_to_run_config_without_hidden_overrides() -> None:
     assert config.selection_max_leave_one_security_cagr_delta == pytest.approx(0.25)
     assert config.selection_extreme_event_action == "penalize"
     assert config.selection_extreme_event_penalty_points == pytest.approx(15.0)
-    assert config.max_price_symbols is None
-    assert config.yahoo_chart_fallback_limit is None
-    assert config.stooq_fallback_limit == 0
-    assert config.market_cache_max_age_hours == pytest.approx(12.0)
-    assert config.refresh_market_data is True
     assert config.output_dir == Path("outputs/live")
     assert config.site_dir == Path("site/live")
     assert config.cache_dir == Path("cache/live")
@@ -384,7 +323,7 @@ def test_full_actual_run_refuses_to_collapse_public_multi_preset_docs_grid(
     args = build_parser().parse_args(
         [
             "run",
-            "--live",
+            "--demo",
             "--output-dir",
             str(tmp_path / "outputs"),
             "--site-dir",
@@ -411,436 +350,20 @@ def test_full_actual_run_refuses_to_collapse_public_multi_preset_docs_grid(
     assert public_manifest.read_bytes() == b"three-preset-grid\n"
 
 
-def test_scheduled_dashboard_reads_run_site_and_title_config(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    path = tmp_path / "dashboard.json"
-    path.write_text(
-        json.dumps(
-            {
-                "title": "Saved dashboard",
-                "site_dir": "saved-site",
-                "default_static_grid_preset": "default",
-                "static_grid_presets": [
-                    {"id": "default", "inputOverrides": {}, "marketSessionOffset": 0},
-                    {
-                        "id": "top30",
-                        "inputOverrides": {
-                            "evaluationWindowDays": 1_000,
-                            "topN": 30,
-                        },
-                        "marketSessionOffset": 0,
-                    },
-                ],
-                "run_args": [
-                    "--live",
-                    "--start-date",
-                    "2016-01-01",
-                    "--output-dir",
-                    "outputs/scheduled",
-                    "--export-input-snapshot",
-                ],
-            }
-        ),
-        encoding="utf-8",
-    )
-    captured: dict[str, object] = {}
-
-    def fake_execute(
-        args: argparse.Namespace,
-        *,
-        site_dir: Path,
-        title: str,
-        presets: list[ScheduledGridPreset],
-        default_preset_id: str,
-    ) -> dict[str, object]:
-        captured.update(
-            args=args,
-            site_dir=site_dir,
-            title=title,
-            presets=presets,
-            default_preset_id=default_preset_id,
-        )
-        return {"sentinel": True}
-
-    monkeypatch.setattr("factor_lab.cli._execute_scheduled_grid", fake_execute)
-    assert main(["scheduled-dashboard", "--config", str(path), "--json"]) == 0
-
-    run_args = captured["args"]
-    assert isinstance(run_args, argparse.Namespace)
-    assert run_args.live is True
-    assert run_args.start_date == "2016-01-01"
-    assert run_args.export_input_snapshot is True
-    assert captured["site_dir"] == Path("saved-site")
-    assert captured["title"] == "Saved dashboard"
-    assert captured["default_preset_id"] == "default"
-    presets = captured["presets"]
-    assert isinstance(presets, list)
-    assert [preset.preset_id for preset in presets] == ["default", "top30"]
-    assert [preset.research_inputs.top_n for preset in presets] == [20, 30]
-    assert [preset.research_inputs.evaluation_window_days for preset in presets] == [
-        756,
-        1_000,
-    ]
-    output = json.loads(capsys.readouterr().out)
-    assert output["scheduledDashboard"] == {
-        "config": str(path),
-        "siteDir": "saved-site",
-        "title": "Saved dashboard",
-    }
 
 
-def test_scheduled_dashboard_rejects_removed_unused_history_limit(
-    tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    path = tmp_path / "dashboard.json"
-    path.write_text(
-        json.dumps({"history_limit": 17, "run_args": ["--live"]}),
-        encoding="utf-8",
-    )
-    with pytest.raises(SystemExit) as exc_info:
-        main(["scheduled-dashboard", "--config", str(path)])
-    assert exc_info.value.code == 2
-    assert "history_limit' was removed" in capsys.readouterr().err
 
 
-def test_scheduled_dashboard_requires_multiple_versioned_static_presets(
-    tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    path = tmp_path / "dashboard.json"
-    path.write_text(
-        json.dumps(
-            {
-                "run_args": ["--live"],
-                "default_static_grid_preset": "only",
-                "static_grid_presets": [
-                    {"id": "only", "inputOverrides": {}, "marketSessionOffset": 0}
-                ],
-            }
-        ),
-        encoding="utf-8",
-    )
-
-    with pytest.raises(SystemExit) as exc_info:
-        main(["scheduled-dashboard", "--config", str(path)])
-
-    assert exc_info.value.code == 2
-    assert "at least two presets" in capsys.readouterr().err
 
 
-def test_scheduled_dashboard_rejects_removed_legacy_arguments(
-    tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    path = tmp_path / "dashboard.json"
-    path.write_text(
-        json.dumps({"run_args": ["--live", "--report-dir", "reports/old"]}),
-        encoding="utf-8",
-    )
-    with pytest.raises(SystemExit) as exc_info:
-        main(["scheduled-dashboard", "--config", str(path)])
-    assert exc_info.value.code == 2
-    assert "removed legacy arguments: --report-dir" in capsys.readouterr().err
 
 
-def test_scheduled_dashboard_rejects_removed_relative_policy_arguments(
-    tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    path = tmp_path / "dashboard.json"
-    path.write_text(
-        json.dumps(
-            {
-                "run_args": [
-                    "--live",
-                    "--policy-sharpe-tolerance",
-                    "0.05",
-                    "--score-size-market-cap-weight",
-                    "0.25",
-                ]
-            }
-        ),
-        encoding="utf-8",
-    )
-
-    with pytest.raises(SystemExit) as exc_info:
-        main(["scheduled-dashboard", "--config", str(path)])
-
-    assert exc_info.value.code == 2
-    error = capsys.readouterr().err
-    assert "removed legacy arguments" in error
-    assert "--policy-sharpe-tolerance" in error
-    assert "--score-size-market-cap-weight" in error
 
 
-def test_scheduled_grid_recomputes_every_declared_input_and_market_offset_preset(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    args = build_parser().parse_args(
-        [
-            "run",
-            "--live",
-            "--output-dir",
-            str(tmp_path / "outputs"),
-            "--site-dir",
-            str(tmp_path / "site"),
-        ]
-    )
-    dates = pd.bdate_range("2024-01-02", periods=12)
-    monkeypatch.setattr(
-        "factor_lab.cli.expected_recent_us_close_date", lambda now: dates[-1].date()
-    )
-    base_market = SimpleNamespace(
-        candidate_symbols=[f"S{index:04d}" for index in range(2_700)],
-        prices=pd.DataFrame({"SPY": 100.0}, index=dates),
-        comparison_prices=pd.DataFrame(index=dates),
-        requested_through=dates[-1].date().isoformat(),
-    )
-    read_configs = []
-    computed_configs = []
-    published = {}
-
-    monkeypatch.setattr("factor_lab.cli.load_market_data", lambda config: base_market)
-    monkeypatch.setattr(
-        "factor_lab.cli.write_market_data_snapshot",
-        lambda market, path: {"manifest": str(path / "market_data_manifest.json")},
-    )
-
-    def fake_read_snapshot(config, path):
-        read_configs.append(config)
-        return SimpleNamespace(
-            candidate_symbols=base_market.candidate_symbols,
-            prices=base_market.prices.loc[: config.end_date]
-            if config.end_date
-            else base_market.prices,
-            requested_through=config.effective_end_date,
-        )
-
-    monkeypatch.setattr("factor_lab.cli.read_market_data_snapshot", fake_read_snapshot)
-
-    def fake_compute(config, market):
-        computed_configs.append(config)
-        as_of = config.end_date or dates[-1].date().isoformat()
-        result_key = f"{config.top_n:04d}{as_of.replace('-', '')}".ljust(64, "a")
-        payload = {
-            "resultKey": result_key,
-            "data": {
-                "mode": "live_market",
-                "synthetic": False,
-                "asOf": as_of,
-                "analyzedSecurityCount": len(market.candidate_symbols),
-            },
-            "researchInputs": ResearchInputs.from_config(config).to_dict(),
-        }
-        return payload, config.output_dir / f"{result_key}.json"
-
-    monkeypatch.setattr("factor_lab.cli._compute_payload", fake_compute)
-    monkeypatch.setattr(
-        "factor_lab.cli._require_full_actual_publication",
-        lambda payload, config: None,
-    )
-    monkeypatch.setattr(
-        "factor_lab.cli.dashboard_summary",
-        lambda payload: {"resultKey": payload["resultKey"]},
-    )
-    monkeypatch.setattr(
-        "factor_lab.cli.write_dashboard_site",
-        lambda payload, site_dir, title: {"index": str(site_dir / "index.html")},
-    )
-
-    def fake_write_grid(data_dir, artifacts, *, default_result_key, write_default_aliases):
-        published.update(
-            artifacts=list(artifacts),
-            default_result_key=default_result_key,
-            write_default_aliases=write_default_aliases,
-        )
-        return {"manifest": data_dir / "grid" / "v1" / "manifest.json"}
-
-    monkeypatch.setattr("factor_lab.cli.write_static_grid", fake_write_grid)
-    monkeypatch.setattr("factor_lab.cli.validate_static_grid", lambda path: {})
-    monkeypatch.setattr(
-        "factor_lab.cli._compact_summary",
-        lambda payload, paths: {"resultKey": payload["resultKey"], "paths": paths},
-    )
-    presets = [
-        ScheduledGridPreset("latest-top20", ResearchInputs(top_n=20), 0),
-        ScheduledGridPreset("latest-top30", ResearchInputs(top_n=30), 0),
-        ScheduledGridPreset("prior-seven", ResearchInputs(top_n=20), 7),
-    ]
-
-    summary = _execute_scheduled_grid(
-        args,
-        site_dir=tmp_path / "site",
-        title="Scheduled grid",
-        presets=presets,
-        default_preset_id="latest-top20",
-    )
-
-    assert len(computed_configs) == 3
-    assert [config.top_n for config in computed_configs] == [20, 30, 20]
-    assert computed_configs[0].end_date == dates[-1].date().isoformat()
-    assert computed_configs[1].end_date == dates[-1].date().isoformat()
-    assert computed_configs[2].end_date == dates[-8].date().isoformat()
-    assert len(read_configs) == 2
-    assert len(published["artifacts"]) == 3
-    assert [artifact.preset_id for artifact in published["artifacts"]] == [
-        "latest-top20",
-        "latest-top30",
-        "prior-seven",
-    ]
-    assert published["default_result_key"] == summary["resultKey"]
-    assert published["write_default_aliases"] is True
-    assert [receipt["marketSessionOffset"] for receipt in summary["staticGridPresets"]] == [
-        0,
-        0,
-        7,
-    ]
-    assert summary["automationStatus"]["state"] == "available"
-    assert Path(summary["paths"]["automationStatus"]).exists()
 
 
-def test_scheduled_grid_preserves_last_good_when_no_factor_is_eligible(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    site_dir = tmp_path / "site"
-    data_dir = site_dir / "data"
-    data_dir.mkdir(parents=True)
-    dashboard_path = data_dir / "dashboard.json"
-    dashboard_bytes = json.dumps(
-        {
-            "schemaVersion": 5,
-            "resultKey": "f" * 64,
-            "generatedAtUtc": "2026-07-27T23:06:06Z",
-            "data": {"asOf": "2026-07-27"},
-        }
-    ).encode()
-    dashboard_path.write_bytes(dashboard_bytes)
-    manifest_path = data_dir / "grid" / "v1" / "manifest.json"
-    manifest_path.parent.mkdir(parents=True)
-    manifest_path.write_bytes(b"last-good-grid\n")
-
-    args = build_parser().parse_args(
-        [
-            "run",
-            "--live",
-            "--output-dir",
-            str(tmp_path / "outputs"),
-            "--site-dir",
-            str(site_dir),
-        ]
-    )
-    dates = pd.bdate_range("2026-07-01", periods=20)
-    monkeypatch.setattr(
-        "factor_lab.cli.expected_recent_us_close_date", lambda now: dates[-1].date()
-    )
-    base_market = SimpleNamespace(
-        candidate_symbols=[f"S{index:04d}" for index in range(2_700)],
-        prices=pd.DataFrame({"SPY": 100.0}, index=dates),
-        comparison_prices=pd.DataFrame(index=dates),
-        requested_through=dates[-1].date().isoformat(),
-        as_of=dates[-1],
-    )
-    monkeypatch.setattr("factor_lab.cli.load_market_data", lambda config: base_market)
-    monkeypatch.setattr(
-        "factor_lab.cli.write_market_data_snapshot",
-        lambda market, path: {"manifest": str(path / "market_data_manifest.json")},
-    )
-
-    error = NoEligibleFactorError(
-        [
-            {
-                "factor": "mom_12_1",
-                "policy_id": "score_liquidity_rank",
-                "guardrail_breaches": ["minimum_sharpe", "maximum_drawdown"],
-            }
-        ]
-    )
-    monkeypatch.setattr(
-        "factor_lab.cli._compute_payload",
-        lambda config, market: (_ for _ in ()).throw(error),
-    )
-
-    summary = _execute_scheduled_grid(
-        args,
-        site_dir=site_dir,
-        title="Scheduled grid",
-        presets=[
-            ScheduledGridPreset("latest-top20", ResearchInputs(top_n=20), 0),
-            ScheduledGridPreset("latest-top30", ResearchInputs(top_n=30), 0),
-        ],
-        default_preset_id="latest-top20",
-    )
-
-    status = summary["automationStatus"]
-    assert status["state"] == "degraded"
-    assert status["reasonCode"] == "no_eligible_factor"
-    assert status["targetDataAsOf"] == dates[-1].date().isoformat()
-    assert status["analysis"]["eligibleFactorCount"] == 0
-    assert status["analysis"]["guardrailsRelaxed"] is False
-    assert status["analysis"]["fallbackFactorSelected"] is False
-    assert status["publication"] == {
-        "updated": False,
-        "lastGoodPreserved": True,
-        "policy": "preserve_last_good",
-    }
-    assert status["lastGood"]["resultKey"] == "f" * 64
-    assert dashboard_path.read_bytes() == dashboard_bytes
-    assert manifest_path.read_bytes() == b"last-good-grid\n"
-    assert json.loads(Path(summary["paths"]["automationStatus"]).read_text()) == status
 
 
-def test_committed_dashboard_config_runs_full_packaged_live_universe() -> None:
-    payload = json.loads(Path(".github/factor-dashboard-config.json").read_text(encoding="utf-8"))
-    run_args = payload["run_args"]
-    args = build_parser().parse_args(["run", *run_args])
-    config = _config(args)
-
-    assert config.live is True
-    assert config.start_date == "2016-01-01"
-    assert config.end_date is None
-    assert config.universe_source_mode == "packaged"
-    assert config.universe_profile == "large_liquid"
-    assert len(config.universe) >= 2_700
-    assert config.max_price_symbols is None
-    assert config.refresh_market_data is True
-    assert config.min_avg_dollar_volume == pytest.approx(5_000_000.0)
-    assert config.stooq_fallback_limit == 0
-    assert config.finance_datareader_fallback_limit == 0
-    assert config.export_input_snapshot is True
-    assert payload["default_static_grid_preset"] == "latest-top20"
-    assert [preset["marketSessionOffset"] for preset in payload["static_grid_presets"]] == [
-        0,
-        0,
-        7,
-    ]
-    assert [
-        preset.get("inputOverrides", {}).get("topN", 20)
-        for preset in payload["static_grid_presets"]
-    ] == [
-        20,
-        30,
-        20,
-    ]
-    assert "--end-date" not in run_args
-    assert "--max-price-symbols" not in run_args
-    assert not (
-        {item for item in run_args if item.startswith("--")}
-        & {
-            "--report-dir",
-            "--selected-factor",
-            "--factor-selection-mode",
-            "--frozen-policy-path",
-            "--target-aum",
-            "--max-adv-participation",
-        }
-    )
-    config.validate()
 
 
 def test_build_site_command_reuses_schema_v3_result(

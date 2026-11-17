@@ -1,29 +1,19 @@
 from __future__ import annotations
 
-import argparse
 import hashlib
-import json
 import os
 import re
-import sys
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import Any, Mapping, Sequence
+from typing import Any, Mapping
 from urllib.parse import urlsplit, urlunsplit
 
-from .cli import (
-    _compute_payload,
-    _config,
-    _load_scheduled_config,
-    _require_full_actual_publication,
-)
 from .config import MAX_TOP_N
 from .dashboard import (
     MAX_FACTOR_HOLDING_HISTORY_SIDECAR_BYTES,
     dashboard_summary,
     externalize_factor_holding_history_sidecar,
 )
-from .data import load_market_data
 from .identity import canonical_json_bytes, canonical_sha256
 from .research_inputs import ResearchInputError, ResearchInputs
 
@@ -358,17 +348,6 @@ def _atomic_write(path: Path, data: bytes) -> None:
         temporary.unlink(missing_ok=True)
 
 
-def _load_base_config(config_path: Path):
-    namespace = argparse.Namespace(config=config_path, site_dir=None, title=None)
-    run_namespace, _, _, _, _ = _load_scheduled_config(namespace)
-    config = _config(run_namespace)
-    if not config.live or config.demo or config.prices_path is not None:
-        raise ControlledRunError("controlled runs require the saved actual-market live mode")
-    if config.max_price_symbols is not None:
-        raise ControlledRunError("controlled runs require the uncapped full universe")
-    if config.end_date is not None:
-        raise ControlledRunError("controlled runs require a rolling live end date")
-    return config
 
 
 def _data_identity(payload: Mapping[str, Any]) -> dict[str, str]:
@@ -513,129 +492,3 @@ def write_control_artifact(
         "artifactPath": str(artifact_path),
         "sidecarPath": str(sidecar_path),
     }
-
-
-def execute_controlled_run(
-    *,
-    research_inputs: Mapping[str, Any],
-    binding: ControlBinding,
-    code_version: str,
-    config_path: Path,
-    site_dir: Path,
-    output_dir: Path,
-    public_site_url: str = DEFAULT_PUBLIC_SITE_URL,
-) -> dict[str, Any]:
-    inputs, normalized = normalize_control_inputs(research_inputs)
-    if canonical_sha256(normalized) != binding.config_hash:
-        raise ControlledRunError("controlled inputs changed after binding validation")
-    config = inputs.apply(_load_base_config(config_path))
-    config.output_dir = output_dir / "analysis"
-    config.site_dir = site_dir
-    config.validate()
-    market = load_market_data(config)
-    payload, _ = _compute_payload(config, market)
-    _require_full_actual_publication(payload, config)
-    return write_control_artifact(
-        payload=payload,
-        normalized_inputs=normalized,
-        binding=binding,
-        code_version=code_version,
-        site_dir=site_dir,
-        manifest_path=output_dir / "result-manifest.json",
-        public_site_url=public_site_url,
-    )
-
-
-def _parse_json_object(value: str) -> dict[str, Any]:
-    try:
-        parsed = json.loads(value)
-    except json.JSONDecodeError as exc:
-        raise ControlledRunError(f"research inputs are not valid JSON: {exc.msg}") from exc
-    if not isinstance(parsed, dict):
-        raise ControlledRunError("research inputs JSON must be an object")
-    return parsed
-
-
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog="python -m factor_lab.control_run",
-        description="Run the existing Momentum Python engine for one bound remote request.",
-    )
-    parser.add_argument("--research-inputs-json", required=True)
-    parser.add_argument("--control-run-id", required=True)
-    parser.add_argument("--control-input-schema-version", required=True)
-    parser.add_argument("--control-input-schema-hash", required=True)
-    parser.add_argument("--control-config-hash-algorithm", required=True)
-    parser.add_argument("--control-config-hash", required=True)
-    parser.add_argument(
-        "--allow-fallback",
-        choices=["true", "false"],
-        default="false",
-    )
-    parser.add_argument("--code-version", required=True)
-    parser.add_argument(
-        "--config",
-        type=Path,
-        default=Path(".github/factor-dashboard-config.json"),
-    )
-    parser.add_argument("--site-dir", type=Path, default=Path("docs"))
-    parser.add_argument(
-        "--output-dir",
-        type=Path,
-        default=Path("outputs/controlled-run"),
-    )
-    parser.add_argument("--public-site-url", default=DEFAULT_PUBLIC_SITE_URL)
-    parser.add_argument("--github-output", type=Path)
-    return parser
-
-
-def _append_github_outputs(path: Path, receipt: Mapping[str, Any]) -> None:
-    manifest = receipt["manifest"]
-    artifact = manifest["artifact"]
-    values = {
-        "manifest_path": receipt["manifestPath"],
-        "artifact_path": receipt["artifactPath"],
-        "sidecar_path": receipt["sidecarPath"],
-        "artifact_url": artifact["url"],
-        "artifact_sha256": artifact["sha256"],
-        "artifact_byte_size": artifact["byteSize"],
-    }
-    with path.open("a", encoding="utf-8") as output:
-        for key, value in values.items():
-            output.write(f"{key}={value}\n")
-
-
-def main(argv: Sequence[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
-    try:
-        raw_inputs = _parse_json_object(args.research_inputs_json)
-        _, normalized = normalize_control_inputs(raw_inputs)
-        binding = validate_control_binding(
-            run_id=args.control_run_id,
-            input_schema_version=args.control_input_schema_version,
-            input_schema_hash=args.control_input_schema_hash,
-            config_hash_algorithm=args.control_config_hash_algorithm,
-            config_hash=args.control_config_hash,
-            normalized_inputs=normalized,
-            allow_fallback=args.allow_fallback == "true",
-        )
-        receipt = execute_controlled_run(
-            research_inputs=normalized,
-            binding=binding,
-            code_version=args.code_version,
-            config_path=args.config,
-            site_dir=args.site_dir,
-            output_dir=args.output_dir,
-            public_site_url=args.public_site_url,
-        )
-        if args.github_output is not None:
-            _append_github_outputs(args.github_output, receipt)
-        print(json.dumps(receipt, ensure_ascii=False, indent=2))
-        return 0
-    except (ControlledRunError, ResearchInputError, ValueError) as exc:
-        print(f"error: {exc}", file=sys.stderr)
-        return 2
-
-
-if __name__ == "__main__":  # pragma: no cover
-    raise SystemExit(main())

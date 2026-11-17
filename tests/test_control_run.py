@@ -409,39 +409,3 @@ def test_artifact_rejects_result_for_a_different_input(
             site_dir=tmp_path / "site",
             manifest_path=tmp_path / "result-manifest.json",
         )
-
-
-def test_workflow_is_thin_external_worker_with_callback() -> None:
-    workflow = Path(".github/workflows/controlled-analysis.yml").read_text(encoding="utf-8")
-    assert "python -m factor_lab.control_run" in workflow
-    assert "research_inputs_json:" in workflow
-    assert "control_input_schema_version:" in workflow
-    assert "control_input_schema_hash:" in workflow
-    assert "control_config_hash_algorithm:" in workflow
-    assert "control_config_hash:" in workflow
-    assert "--allow-fallback" in workflow
-    assert "data/control-runs/v1" not in workflow
-    assert "result-manifest" in workflow
-    assert "QUANT_CONTROL_WORKER_CALLBACK_TOKEN" in workflow
-    assert "timeout-minutes: 210" in workflow
-    assert '--code-version "github:${GITHUB_REPOSITORY}@${ANALYSIS_SHA}"' in workflow
-    assert "always() && failure()" in workflow
-    assert '/v1/internal/runs/${CONTROL_RUN_ID}/failure' in workflow
-    assert '"projectId": "momentum"' in workflow
-    assert '"providerRunId": f"github-actions:{run_id}"' in workflow
-    assert '"errorCode": "worker_workflow_failed"' in workflow
-    assert '"occurredAt": datetime.now(timezone.utc)' in workflow
-    assert workflow.count("from urllib.parse import urlsplit, urlunsplit") == 2
-    assert workflow.count("--proto '=https'") == 2
-    assert workflow.count("or parsed.username") == 1
-    assert workflow.count("or parsed_callback_base.username") == 1
-    assert workflow.count("or parsed.query") == 1
-    assert workflow.count("or parsed_callback_base.query") == 1
-    assert "Reject secrets in immutable controlled result" in workflow
-    assert "factor_lab.publication_security" in workflow
-    assert '"${ARTIFACT_PATH}"' in workflow
-    assert '"${SIDECAR_PATH}"' in workflow
-    assert workflow.index("factor_lab.publication_security") < workflow.index(
-        'git add -- "${ARTIFACT_PATH}" "${SIDECAR_PATH}"'
-    )
-    assert "run_analysis" not in workflow

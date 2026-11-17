@@ -1,5 +1,7 @@
 # Factor
 
+2026-11-17 사용자 요청으로 기존 ETF·주식 혼합 수집기와 자동화를 제거했습니다. 이 저장소의 기존 사이트·분석 결과·원자료는 보존하며, 현재 수집·계산 운영은 Quant2Alpha의 메리츠 개별 주식 경로로 이전합니다. 아래의 `live_market`과 과거 후보 수는 보존된 판본의 출처입니다.
+
 Momentum과 Best의 합집합 2,960종목을 사용해 가격·거래량 32개 정의를 연구하고, 26개 후보 중에서 매월 팩터를 선택합니다. 최근 756거래일의 비용 후 CAGR·Sortino·Calmar·MDD·기간 안정성을 비교하며 실제 보유에서 다음 거래일 종가 목표로 이동하는 회계를 계산합니다.
 
 [통합 화면](https://sonchanggi.github.io/factor/)은 현재 선택·팩터 탐색·비교·실험·데이터를 제공합니다. 현재 선택의 성과 보기에서 팩터를 고르면 전체 비용 후 성과와 신호월별 실제 보유 종목·비중을 조회합니다. [통합 사용법](docs/development/integrated-local.md), [데이터 계약](docs/development/integrated-data-contract.md), [성과 감사](docs/development/performance-repair-2026-10-20.md), [배포 계약](docs/development/deployment-2026-10-20.md)을 참고하세요.
@@ -9,7 +11,7 @@ python -m factor_lab.cli integrated-run --snapshot <frozen-snapshot> --output <n
 python -m factor_lab.cli serve-integrated --snapshot <frozen-snapshot> --site <reviewed-site> --runs <runs-directory> --port 50073
 ```
 
-공개 정적 화면은 검증된 결과를 조회합니다. 로컬 실험은 같은 Python 엔진으로 실행합니다. 정기 계산은 통합 엔진으로 실행합니다. 기존 Control JSON은 별도 legacy 계약으로 유지하며 새 통합 결과로 묵시 변환하지 않습니다. [자동화·이전 주소·입력 보존](docs/development/factor-operations.md)을 참고하세요. Pages는 `build_type=workflow` 설정의 단일 게시자를 사용하고, `GITHUB_TOKEN`으로 만든 정기 결과 커밋은 정확한 SHA로 배포를 명시적으로 요청합니다.
+공개 정적 화면은 검증된 결과를 조회합니다. 로컬 실험은 같은 Python 엔진으로 실행합니다. 이 저장소의 정기 수집·계산은 종료했습니다. 기존 Control JSON은 별도 legacy 계약으로 유지하며 새 통합 결과로 묵시 변환하지 않습니다. [자동화·이전 주소·입력 보존](docs/development/factor-operations.md)을 참고하세요. Pages의 검증·정적 게시 기능은 보존된 판본을 정확한 SHA로 게시하는 용도로만 남습니다.
 
 미국 주요 거래소 기준의 현재 후보와 ETF 추가 목록은 [유니버스 점검·로컬 계산](docs/development/exchange-universe.md)에서 확인할 수 있습니다.
 
@@ -71,30 +73,12 @@ raw_i = 0.05
 ## 설치
 
 ```bash
-uv sync --extra live --extra dev
+uv sync --frozen --extra dev
 ```
 
-## 실제시장 전체 실행
+## 저장된 실제시장 입력 재계산
 
-```bash
-uv run python -m factor_lab.cli run \
-  --live \
-  --start-date 2016-01-01 \
-  --universe-profile large_liquid \
-  --universe-source-mode packaged \
-  --min-avg-dollar-volume 5000000 \
-  --max-price-symbols none \
-  --refresh-market-data \
-  --export-input-snapshot \
-  --output-dir outputs/daily-dashboard \
-  --site-dir outputs/daily-dashboard/site \
-  --json
-```
-
-`--end-date`를 생략하면 요청 종료일은 실행일입니다. 결과의 `data.asOf`는 제공자가 실제로 반환한 마지막 완료 세션입니다.
-일반 `run` 명령은 공개 `docs`의 3-preset grid를 단일 결과로 축소할 수 없도록
-`--site-dir docs`를 거절합니다. 공개 grid 갱신은 전체 preset을 다시 만드는
-`scheduled-dashboard` 또는 완전한 검토 artifact 집합을 받는 `build-static-grid`만 사용합니다.
+`integrated-run --snapshot <frozen-snapshot> --output <new-run-directory>`로 검증된 입력을 새 디렉터리에 재계산합니다. 기존 결과와 원자료를 덮어쓰지 않습니다. 실시간 수집은 Quant2Alpha의 Windows 메리츠 공통 데이터 센터를 사용합니다.
 
 ## 연구 입력
 
@@ -118,88 +102,9 @@ uv run python -m factor_lab.cli run \
 
 ## 정적 Pages와 로컬 API
 
-정적 Pages는 임의 계산 환경이 아닙니다. 지원되는 실제시장 결과만 다음 sparse manifest에 등록합니다.
+기존 정적 Pages와 `docs/data/grid/v1`의 결과를 보존합니다. `build-static-grid`는 검토된 결과·요약 쌍으로 조회용 grid를 만들며, `serve-integrated` 로컬 API는 명시한 frozen snapshot을 읽어 오프라인 실험을 실행합니다. 과거 2,700개 이상 실제시장 결과와 그 source identity는 원래 판본의 검증 규칙으로 계속 확인합니다.
 
-```text
-docs/data/grid/v1/manifest.json
-docs/data/grid/v1/results/<resultKey>.json
-docs/data/grid/v1/summaries/<resultKey>.json
-```
-
-브라우저는 manifest에서 전체 입력 tuple이 정확히 같은 entry만 정적 결과로 엽니다. 부분 일치나 최근접 preset은 없습니다. 공개 Pages의 미지원 입력은 배포된 공통 control API가 GitHub Actions/Python worker에 전달합니다. loopback 또는 파일 기반 로컬 미리보기에서는 `127.0.0.1:8765` 로컬 API를 사용합니다. 두 경로 모두 actual-market 2,700+·61개 독립 팩터 회계·고정 비중 방법·identity를 다시 검증한 뒤에만 화면을 바꾸며, 실행이나 계약 검증이 실패하면 현재 검증 결과를 유지합니다.
-
-여러 사전 계산 결과를 하나의 bounded grid로 만들 수 있습니다.
-
-```bash
-uv run python -m factor_lab.cli build-static-grid \
-  --artifact result-a.json summary-a.json \
-  --preset-id latest-top20 \
-  --artifact result-b.json summary-b.json \
-  --preset-id latest-top30 \
-  --default-result-key <sha256> \
-  --site-dir docs
-```
-
-위 static-grid와 기존 Control API는 이전 계약의 수동 호환 경로입니다. 현재 Daily·Watchdog·Pages의 운영 기준은 [Factor 운영](docs/development/factor-operations.md)을 따릅니다. 정기 실행은 통합 결과를 갱신하며 legacy grid를 새 통합 결과로 변환하지 않습니다.
-
-임의 입력은 loopback 전용 로컬 API에서 실행합니다.
-
-```bash
-uv run python -m factor_lab.cli serve-local-api \
-  --live \
-  --start-date 2016-01-01 \
-  --min-avg-dollar-volume 5000000 \
-  --host 127.0.0.1 \
-  --port 8765
-```
-
-API 계약:
-
-- `GET /api/capabilities`
-- `POST /api/runs`
-- `GET /api/runs/<resultKey>`
-
-cache hit은 canonical schema-v5 결과를 반환하고, 새 장기 실행은 `202`와 status URL을 반환합니다. API도 실제시장·2,700개 이상만 허용하며 demo/static 결과로 대체하지 않습니다.
-브라우저 Origin은 프로젝트 Pages(`https://sonchanggi.github.io`)와 loopback만 기본
-허용합니다. 다른 검토된 HTTPS origin은 반복 가능한 `--allowed-origin`으로 명시하며,
-그 밖의 Origin은 preflight와 본 요청 모두 시장 로드 전에 403으로 차단됩니다.
-
-로컬 정적 viewer에서 임의 입력을 실행하려면 위 loopback API를 먼저 시작합니다. 공개 Pages는 loopback을 호출하지 않습니다. API 결과 URL은 manifest에 없는 동적 result key를 정적 preset처럼 가장하지 않습니다. URL의 base result는 최신 default preset으로 유지하고 공개 입력 전체를 기록하므로, 새로고침·공유 시 같은 최신 조건을 다시 실행할 수 있습니다.
-각 정적 entry의 안정적인 `presetId`도 URL에 기록하므로 일일 갱신으로 content-addressed
-result key가 교체·정리된 뒤에도 같은 rolling preset과 공개 입력을 새 manifest에서 복원합니다.
-
-## 공통 원격 control API
-
-정적 grid와 loopback API는 그대로 유지합니다. 공개 Pages는
-`https://quant-control-api.onrender.com`을 `quant-run-api-base`로 사용하고,
-로컬 미리보기는 loopback API를 우선합니다.
-
-```text
-GET  /v1/projects/momentum/capabilities
-POST /v1/projects/momentum/runs
-GET  /v1/runs/<runId>
-GET  /v1/runs/<runId>/result
-```
-
-원격 요청은 `momentum/v3`의 26개 입력을 전부 보내며 평가 창은 21–2,520
-거래 세션의 `evaluationWindowDays` 정수로 전달합니다. 부분 입력, 알 수 없는 입력,
-fallback을 거절합니다. API가 만든 `configHash`와 worker가 같은 RFC 8785 입력으로
-계산한 hash가 다르면 Python을 실행하지 않습니다.
-
-API 프로세스는 장기 분석을 직접 실행하지 않습니다.
-`.github/workflows/controlled-analysis.yml`이 기존 `ResearchInputs.apply()`와
-기존 Python 계산 경로를 사용하고, 공개 기본 alias를 덮어쓰지 않는 immutable
-artifact를 게시합니다. 브라우저는 run/schema/config/data/code/artifact identity와
-정확한 byte SHA-256을 모두 확인한 뒤에만 화면 결과를 바꿉니다. 대기·실패·취소·불일치
-상태에서는 기존 검증 결과를 계속 표시합니다.
-
-worker callback에는 다음 저장소 secret이 필요합니다.
-
-- `QUANT_CONTROL_API_BASE_URL`
-- `QUANT_CONTROL_WORKER_CALLBACK_TOKEN`
-
-세션 액세스 토큰은 브라우저 탭 메모리에서만 사용하며 Web Storage나 URL에 저장하지
-않습니다. meta가 비어 있으면 기존 정적 preset/loopback 동작만 사용합니다.
+이전 `--live`, `integrated-collect`, `scheduled-dashboard`, `serve-local-api` 수집 진입점과 GitHub Actions Daily·Watchdog·Controlled Analysis·Reviewed Universe 자동화는 제거했습니다. 기존 Control JSON의 읽기·해시 검증은 보존합니다. 원자료와 과거 사이트의 버튼·JSON을 새 결과로 묵시 변경하지 않습니다.
 
 ## 캐시와 result identity
 
